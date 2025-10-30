@@ -31,6 +31,53 @@ ROLE_TYPES = {
 GENRES = ['Action', 'Comedy', 'Drama', 'Horror', 'Romance', 'Sci-Fi', 'Thriller', 'Western']
 AUDIENCES = ['Kids', 'Teens', 'Adults', 'Families', 'Art House']
 
+# Pre-generated names for Phase 0 (Goldman era-inspired)
+DEFAULT_NAMES = {
+    'screenwriter': [
+        'Bobby Goldman',
+        'Nora Ephron Jr.',
+        'Paddy Chayefsky II',
+        'Alvin Sargent',
+        'Frank Pierson',
+        'Ernest Lehman III',
+        'Ruth Prawer',
+        'Horton Foote Jr.',
+        'Robert Towne II',
+        'Lorenzo Semple'
+    ],
+    'director': [
+        'Stevie Screensberg',
+        'Frankie Coppola',
+        'Marty Scorcese',
+        'Bobby Altman',
+        'Mike Nichols Jr.',
+        'Billy Wilder II',
+        'Stanley Kubrick III',
+        'Arthur Penn',
+        'Sydney Pollack Jr.',
+        'Hal Ashby'
+    ],
+    'star': [
+        'Dusty Hoffman',
+        'Bobby DeNiro',
+        'Jackie Nicholson',
+        'Meryl Streepleton',
+        'Robbie Redford',
+        'Warren Beatty Jr.',
+        'Faye Dunaway II',
+        'Al Pacino III',
+        'Diane Keaton',
+        'Gene Hackman Jr.'
+    ]
+}
+
+def get_default_name(role_type, count):
+    """Get a default name for a role type based on count"""
+    names = DEFAULT_NAMES.get(role_type, [])
+    if count < len(names):
+        return names[count]
+    return ""  # Return empty if we run out
+
 def generate_talent_stats(role_type, name, is_producer=False):
     """Generate Heat, Prestige, and Salary for a talent"""
     heat = random.randint(1, 255)
@@ -323,6 +370,7 @@ def player():
         <div class="info-box">
             <h2>Name your <span id="roleType"></span></h2>
             <p id="roleProgress"></p>
+            <p style="font-size: 14px; color: #aaa;">A name is suggested - edit it or submit as-is!</p>
         </div>
         <input type="text" id="talentName" placeholder="Enter name">
         <button onclick="submitName()" id="submit-btn">Submit</button>
@@ -471,7 +519,11 @@ def player():
                     `${currentCount + 1} of ${maxCount}`;
                 document.getElementById('submit-btn').disabled = false;
                 document.getElementById('talentName').disabled = false;
-                document.getElementById('talentName').value = '';
+                
+                // Pre-fill with default name
+                const defaultName = getDefaultName(currentRole, currentCount);
+                document.getElementById('talentName').value = defaultName;
+                document.getElementById('talentName').select(); // Select text for easy replacement
                 document.getElementById('talentName').focus();
                 
             } else if (data.phase === 'phase0_complete') {
@@ -480,6 +532,10 @@ def player():
                 showScreen('phase1-screen');
                 document.getElementById('year').textContent = data.year;
                 document.getElementById('turnNum').textContent = data.turn;
+                
+                // Debug
+                console.log('Phase 1 - Current turn cards:', data.current_turn_cards);
+                console.log('Phase 1 - Card count:', data.current_turn_cards ? data.current_turn_cards.length : 0);
                 
                 // Update role inventory
                 updateRoleInventory(myData.roles || [], 'roleInventory');
@@ -526,6 +582,11 @@ def player():
                 }
             } else if (data.phase === 'phase1_packaging') {
                 showScreen('packaging-screen');
+                
+                // Debug: log what we're receiving
+                console.log('Packaging phase - my roles:', myData.roles);
+                console.log('Packaging phase - my films:', myData.films);
+                
                 updatePackagingView(data, myData);
             }
         });
@@ -696,6 +757,50 @@ def player():
             return counts[role];
         }
         
+        function getDefaultName(roleType, count) {
+            const names = {
+                'screenwriter': [
+                    'Bobby Goldman',
+                    'Nora Ephron Jr.',
+                    'Paddy Chayefsky II',
+                    'Alvin Sargent',
+                    'Frank Pierson',
+                    'Ernest Lehman III',
+                    'Ruth Prawer',
+                    'Horton Foote Jr.',
+                    'Robert Towne II',
+                    'Lorenzo Semple'
+                ],
+                'director': [
+                    'Stevie Screensberg',
+                    'Frankie Coppola',
+                    'Marty Scorcese',
+                    'Bobby Altman',
+                    'Mike Nichols Jr.',
+                    'Billy Wilder II',
+                    'Stanley Kubrick III',
+                    'Arthur Penn',
+                    'Sydney Pollack Jr.',
+                    'Hal Ashby'
+                ],
+                'star': [
+                    'Dusty Hoffman',
+                    'Bobby DeNiro',
+                    'Jackie Nicholson',
+                    'Meryl Streepleton',
+                    'Robbie Redford',
+                    'Warren Beatty Jr.',
+                    'Faye Dunaway II',
+                    'Al Pacino III',
+                    'Diane Keaton',
+                    'Gene Hackman Jr.'
+                ]
+            };
+            
+            const roleNames = names[roleType] || [];
+            return count < roleNames.length ? roleNames[count] : '';
+        }
+        
         // Allow Enter key to submit
         document.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -812,8 +917,12 @@ def start_new_turn():
     # Generate random cards from talent pool + new producers
     cards = []
     
-    # Add some existing talent
-    available_talent = [t for t in game_state['talent_pool']]
+    # Add some existing talent (make sure we have a copy, not reference)
+    available_talent = [t.copy() for t in game_state['talent_pool']]
+    
+    print(f"  Available talent pool size: {len(available_talent)}")
+    print(f"  Need {num_cards} cards for this turn")
+    
     if len(available_talent) >= num_cards - 1:
         cards = random.sample(available_talent, num_cards - 1)
     else:
@@ -829,7 +938,9 @@ def start_new_turn():
     random.shuffle(cards)
     
     game_state['current_turn_cards'] = cards
-    print(f"Turn {game_state['turn']}: Generated {len(cards)} cards")
+    print(f"  Generated {len(cards)} cards for Turn {game_state['turn']}")
+    for i, card in enumerate(cards):
+        print(f"    Card {i}: {card['name']} ({card['role']})")
 
 @socketio.on('select_card')
 def handle_select_card(data):
@@ -949,6 +1060,11 @@ def advance_turn():
         # Move to Spring packaging
         game_state['phase'] = 'phase1_packaging'
         print("\n=== Winter production complete! Time to package films for Spring release ===\n")
+        
+        # Debug: show what roles each player has
+        for sid, player in game_state['players'].items():
+            role_count = len(player.get('roles', []))
+            print(f"  {player['name']} has {role_count} roles")
     
     broadcast_game_state()
 
