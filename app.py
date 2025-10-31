@@ -555,6 +555,46 @@ def player():
                 
                 cardsArea.innerHTML = '<h3>Select a Role:</h3>';
                 console.log('About to render', data.current_turn_cards.length, 'cards');
+                
+                data.current_turn_cards.forEach((card, index) => {
+                    const selected = data.player_selections[socket.id] === index;
+                    const disabled = data.player_selections[socket.id] !== undefined;
+                    const canAfford = myData.money >= card.salary;
+                    
+                    console.log(`Rendering card ${index}:`, card.name, card.role);
+                    
+                    cardsArea.innerHTML += `
+                        <div class="info-box" style="margin: 10px 0; ${selected ? 'border: 2px solid #e50914;' : ''} ${!canAfford ? 'opacity: 0.5;' : ''}">
+                            <h3>${card.name}</h3>
+                            <p><strong>${card.role.toUpperCase()}</strong></p>
+                            <p>Heat: ${card.heat_bucket} | Prestige: ${card.prestige_bucket}</p>
+                            <p>Salary: ${card.salary}M ${!canAfford ? '❌ TOO EXPENSIVE' : ''}</p>
+                            ${card.genre ? `<p>Genre: ${card.genre}</p>` : ''}
+                            ${card.audience ? `<p>Audience: ${card.audience}</p>` : ''}
+                            <button onclick="selectCard(${index})" ${disabled || !canAfford ? 'disabled' : ''}>
+                                ${selected ? 'Selected ✓' : canAfford ? 'Select' : 'Cannot Afford'}
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                // Pass button
+                const passDisabled = data.player_selections[socket.id] !== undefined;
+                const passSelected = data.player_selections[socket.id] === 'pass';
+                cardsArea.innerHTML += `
+                    <button onclick="selectPass()" ${passDisabled ? 'disabled' : ''} 
+                            style="background: #666; margin-top: 10px;">
+                        ${passSelected ? 'Passed ✓' : 'Pass This Turn'}
+                    </button>
+                `;
+                
+                // Status
+                const statusDiv = document.getElementById('selection-status');
+                if (data.player_selections[socket.id] !== undefined) {
+                    statusDiv.innerHTML = '<p style="color: #e50914;">✓ Selection made! Waiting for other players...</p>';
+                } else {
+                    statusDiv.innerHTML = '';
+                }
                 cardsArea.innerHTML = '<h3>Select a Role:</h3>';
                 
                 data.current_turn_cards.forEach((card, index) => {
