@@ -534,14 +534,27 @@ def player():
                 document.getElementById('turnNum').textContent = data.turn;
                 
                 // Debug
-                console.log('Phase 1 - Current turn cards:', data.current_turn_cards);
-                console.log('Phase 1 - Card count:', data.current_turn_cards ? data.current_turn_cards.length : 0);
+                console.log('=== PHASE 1 DEBUG ===');
+                console.log('Full game state:', data);
+                console.log('Current turn cards:', data.current_turn_cards);
+                console.log('Card count:', data.current_turn_cards ? data.current_turn_cards.length : 'UNDEFINED');
+                console.log('My data:', myData);
                 
                 // Update role inventory
                 updateRoleInventory(myData.roles || [], 'roleInventory');
                 
                 // Display cards
                 const cardsArea = document.getElementById('cards-area');
+                cardsArea.innerHTML = '';
+                
+                if (!data.current_turn_cards || data.current_turn_cards.length === 0) {
+                    cardsArea.innerHTML = '<p style="color: red;">ERROR: No cards available! Check server console.</p>';
+                    console.error('No cards in current_turn_cards!');
+                    return;
+                }
+                
+                cardsArea.innerHTML = '<h3>Select a Role:</h3>';
+                console.log('About to render', data.current_turn_cards.length, 'cards');
                 cardsArea.innerHTML = '<h3>Select a Role:</h3>';
                 
                 data.current_turn_cards.forEach((card, index) => {
