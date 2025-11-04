@@ -155,3 +155,50 @@ input:focus, textarea:focus {
 .mb-10 {
     margin-bottom: 10px;
 }
+
+/* Film cards */
+.film-card {
+    background: #2a2a2a;
+    border-left: 4px solid #e50914;
+    padding: 20px;
+    margin: 15px 0;
+    border-radius: 5px;
+}
+
+.film-card h3 {
+    color: #e50914;
+    margin-top: 0;
+}
+
+.box-office-result {
+    background: #1a1a1a;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+    border: 2px solid #4CAF50;
+}
+
+.box-office-hit {
+    border-color: #4CAF50;
+}
+
+.box-office-moderate {
+    border-color: #ff9800;
+}
+
+.cast-crew {
+    background: #1a1a1a;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+
+.cast-crew h4 {
+    margin-top: 0;
+    font-size: 16px;
+}
+
+.cast-crew p {
+    margin: 5px 0;
+    font-size: 14px;
+}

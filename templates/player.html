@@ -88,6 +88,24 @@
         <button onclick="finishPackaging()" id="finish-pkg-btn">Done Packaging (Releases Remaining Roles)</button>
     </div>
     
+    <!-- Phase 1 Releases Screen -->
+    <div id="releases-screen" class="screen">
+        <h1>🎬 Spring Releases</h1>
+        <div class="info-box">
+            <h2 id="studioNameRel"></h2>
+            <p>💰 Budget: $<span id="relMoney">100</span>M</p>
+            <p>⭐ Score: <span id="relScore">0</span> points</p>
+        </div>
+        
+        <h3>Your Films:</h3>
+        <div id="my-films"></div>
+        
+        <h3>All Releases This Season:</h3>
+        <div id="all-films"></div>
+        
+        <button onclick="continueGame()" id="continue-btn" style="margin-top: 20px;">Continue to Next Phase</button>
+    </div>
+    
     <script src="{{ url_for('static', filename='js/player.js') }}"></script>
 </body>
 </html>

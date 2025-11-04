@@ -153,7 +153,7 @@ def handle_duplicate_names(talent_list):
 def generate_turn_cards(game_state):
     """Generate cards for the current turn"""
     num_players = len(game_state.players)
-    num_cards = num_players + 1
+    num_cards = num_players + 2
     
     cards = []
     

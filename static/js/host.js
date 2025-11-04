@@ -109,6 +109,70 @@ function updateDisplay(state) {
             contentDiv.innerHTML += `<p>${ready} ${player.name} - ${roleCount} roles, ${filmCount} films</p>`;
         }
         contentDiv.innerHTML += '</div>';
+    } else if (state.phase === 'phase1_releases') {
+        detailsDiv.innerHTML = '<p>🎬 Spring Releases - Box Office Results! 🎬</p>';
+        contentDiv.innerHTML = '<h2>This Season\'s Films:</h2>';
+        
+        // Collect all films from all players
+        let allFilms = [];
+        for (let [sid, player] of Object.entries(state.players)) {
+            if (player.films) {
+                player.films.forEach(film => {
+                    allFilms.push({
+                        ...film,
+                        studio: player.name
+                    });
+                });
+            }
+        }
+        
+        // Display each film
+        allFilms.forEach(film => {
+            contentDiv.innerHTML += `
+                <div class="talent-card" style="width: 90%; max-width: 600px; background: #2a2a2a; border-left: 4px solid #e50914;">
+                    <h3 style="color: #e50914; margin-top: 0;">${film.title}</h3>
+                    <p style="font-style: italic; color: #aaa;">"${film.teaser || 'No teaser provided'}"</p>
+                    <p><strong>Studio:</strong> ${film.studio}</p>
+                    <p><strong>Genre:</strong> ${film.genre} | <strong>Audience:</strong> ${film.audience}</p>
+                    
+                    <div style="background: #1a1a1a; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                        <h4 style="margin-top: 0;">Cast & Crew:</h4>
+                        ${film.roles.map(r => `
+                            <p style="margin: 5px 0;">
+                                <strong>${r.role.toUpperCase()}:</strong> ${r.name}
+                                <span style="color: #888;">(Heat: ${r.heat_bucket}, Prestige: ${r.prestige_bucket})</span>
+                            </p>
+                        `).join('')}
+                    </div>
+                    
+                    <div style="background: #1a1a1a; padding: 15px; margin: 10px 0; border-radius: 5px; border: 2px solid ${film.box_office > 100 ? '#4CAF50' : '#ff9800'};">
+                        <h4 style="margin-top: 0; color: #4CAF50;">📊 Box Office Results</h4>
+                        <p><strong>Total Heat:</strong> ${film.heat}</p>
+                        <p><strong>Market Multiplier:</strong> ${film.multiplier}x</p>
+                        <p style="font-size: 24px; color: #4CAF50; margin: 10px 0;">
+                            <strong>💰 ${film.box_office}M</strong>
+                        </p>
+                    </div>
+                </div>
+            `;
+        });
+        
+        // Show player standings
+        contentDiv.innerHTML += '<h2 style="margin-top: 40px;">Studio Standings:</h2>';
+        contentDiv.innerHTML += '<div class="submissions">';
+        
+        // Sort players by score
+        const playerArray = Object.entries(state.players).map(([sid, p]) => p);
+        playerArray.sort((a, b) => b.score - a.score);
+        
+        playerArray.forEach((player, index) => {
+            const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+            contentDiv.innerHTML += `
+                <p>${medal} <strong>${player.name}:</strong> ${player.money}M budget | ${player.score} points | ${player.films ? player.films.length : 0} films</p>
+            `;
+        });
+        contentDiv.innerHTML += '</div>';
+        
     } else if (state.phase === 'phase1_complete') {
         detailsDiv.innerHTML = '<p>Winter production complete! Ready for Spring releases.</p>';
         contentDiv.innerHTML = '';

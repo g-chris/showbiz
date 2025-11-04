@@ -222,10 +222,14 @@ def register_handlers(socketio, game_state):
     def handle_greenlight_film(data):
         player = game_state.players[request.sid]
         role_indices = data['roleIndices']
-        title = data['title']
-        teaser = data.get('teaser', '')
+        title = data['title'].strip()
+        teaser = data.get('teaser', '').strip()
         
         if not player.get('roles'):
+            return
+        
+        if not title:
+            emit('package_error', {'message': 'Film title is required!'})
             return
         
         # Extract roles
@@ -233,7 +237,7 @@ def register_handlers(socketio, game_state):
         
         # Validate package
         if not game_logic.validate_film_package(roles):
-            emit('package_error', {'message': 'Invalid package!'})
+            emit('package_error', {'message': 'Invalid package! Need Producer, Screenwriter, Director, and Star'})
             return
         
         # Calculate film stats
@@ -241,7 +245,7 @@ def register_handlers(socketio, game_state):
         
         film = {
             'title': title,
-            'teaser': teaser,
+            'teaser': teaser if teaser else f"A {stats['genre']} film for {stats['audience']}",
             'roles': roles,
             **stats
         }
@@ -255,7 +259,7 @@ def register_handlers(socketio, game_state):
             if idx < len(player['roles']):
                 player['roles'].pop(idx)
         
-        print(f"{player['name']} greenlit '{title}'")
+        print(f"{player['name']} greenlit '{title}' (Heat: {stats['heat']}, Prestige: {stats['prestige']})")
         broadcast_game_state()
     
     @socketio.on('finish_packaging')
@@ -273,9 +277,36 @@ def register_handlers(socketio, game_state):
         
         # Check if all players ready
         if all(p.get('spring_ready', False) for p in game_state.players.values()):
-            game_state.phase = 'phase1_releases'
-            print("\n=== All players ready! Spring releases ===\n")
+            start_spring_releases()
         
+        broadcast_game_state()
+    
+    def start_spring_releases():
+        """Calculate box office for all films and move to releases phase"""
+        import random
+        
+        print("\n=== SPRING RELEASES ===\n")
+        game_state.phase = 'phase1_releases'
+        
+        # Calculate box office for each player's films
+        for sid, player in game_state.players.items():
+            if player.get('films'):
+                for film in player['films']:
+                    # Calculate box office: Heat * random multiplier (0.1 to 2.5)
+                    multiplier = random.uniform(0.1, 2.5)
+                    box_office = int(film['heat'] * multiplier)
+                    film['box_office'] = box_office
+                    film['multiplier'] = round(multiplier, 2)
+                    
+                    # Add to player's money
+                    player['money'] += box_office
+                    player['score'] += box_office  # Score = total money earned
+                    
+                    print(f"{player['name']}: '{film['title']}'")
+                    print(f"  Heat: {film['heat']} x {multiplier:.2f} = ${box_office}M")
+                    print(f"  New balance: ${player['money']}M")
+        
+        print("\n=== BOX OFFICE COMPLETE ===\n")
         broadcast_game_state()
     
     @socketio.on('disconnect')

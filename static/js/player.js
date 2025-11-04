@@ -36,9 +36,14 @@ socket.on('joined', () => {
     document.getElementById('studioName').textContent = myName;
     document.getElementById('studioNameP1').textContent = myName;
     document.getElementById('studioNamePkg').textContent = myName;
+    document.getElementById('studioNameRel').textContent = myName;
 });
 
 socket.on('selection_error', (data) => {
+    alert(data.message);
+});
+
+socket.on('package_error', (data) => {
     alert(data.message);
 });
 
@@ -50,6 +55,8 @@ socket.on('game_update', (data) => {
     document.getElementById('lobbyMoney').textContent = myData.money;
     document.getElementById('p1Money').textContent = myData.money;
     document.getElementById('pkgMoney').textContent = myData.money;
+    document.getElementById('relMoney').textContent = myData.money;
+    document.getElementById('relScore').textContent = myData.score;
     
     // Update greenlit films from server
     if (myData.films) {
@@ -172,6 +179,9 @@ socket.on('game_update', (data) => {
         showScreen('packaging-screen');
         console.log('Packaging - my roles:', myData.roles);
         updatePackagingView(data, myData);
+    } else if (data.phase === 'phase1_releases') {
+        showScreen('releases-screen');
+        updateReleasesView(data, myData);
     }
 });
 
@@ -346,6 +356,64 @@ function finishPackaging() {
     if (confirm('Release all remaining roles and move to Spring releases?')) {
         socket.emit('finish_packaging');
     }
+}
+
+function updateReleasesView(gameData, playerData) {
+    // Show player's own films
+    const myFilmsDiv = document.getElementById('my-films');
+    const myFilms = playerData.films || [];
+    
+    if (myFilms.length === 0) {
+        myFilmsDiv.innerHTML = '<p><em>You didn\'t release any films this season</em></p>';
+    } else {
+        myFilmsDiv.innerHTML = '';
+        myFilms.forEach(film => {
+            const performance = film.box_office > 100 ? '🔥 Hit!' : film.box_office > 50 ? '✓ Success' : '📉 Modest';
+            myFilmsDiv.innerHTML += `
+                <div class="info-box" style="border: 2px solid ${film.box_office > 100 ? '#4CAF50' : '#ff9800'}; margin: 10px 0;">
+                    <h3 style="color: #e50914; margin-top: 0;">${film.title}</h3>
+                    <p style="font-style: italic;">"${film.teaser || 'No teaser'}"</p>
+                    <p><strong>Heat:</strong> ${film.heat} x ${film.multiplier} = <strong style="color: #4CAF50;">${film.box_office}M</strong></p>
+                    <p>${performance}</p>
+                </div>
+            `;
+        });
+    }
+    
+    // Show all films from all players
+    const allFilmsDiv = document.getElementById('all-films');
+    allFilmsDiv.innerHTML = '';
+    
+    let allFilms = [];
+    for (let [sid, player] of Object.entries(gameData.players)) {
+        if (player.films) {
+            player.films.forEach(film => {
+                allFilms.push({
+                    ...film,
+                    studio: player.name
+                });
+            });
+        }
+    }
+    
+    // Sort by box office
+    allFilms.sort((a, b) => b.box_office - a.box_office);
+    
+    allFilms.forEach((film, index) => {
+        const isMyFilm = film.studio === playerData.name;
+        const ranking = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+        
+        allFilmsDiv.innerHTML += `
+            <div class="info-box" style="margin: 10px 0; ${isMyFilm ? 'border: 2px solid #e50914;' : ''}">
+                <p style="margin: 0;"><strong>${ranking} ${film.title}</strong> (${film.studio})</p>
+                <p style="margin: 5px 0; color: #4CAF50;"><strong>${film.box_office}M</strong></p>
+            </div>
+        `;
+    });
+}
+
+function continueGame() {
+    alert('Next phase not yet implemented!');
 }
 
 // Allow Enter key to submit
