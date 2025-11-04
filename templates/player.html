@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hollywood Game - Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Join Screen -->
+    <div id="join-screen" class="screen active">
+        <h1>🎬 Join Game</h1>
+        <input type="text" id="playerName" placeholder="Your Studio Name">
+        <button onclick="joinGame()">Join Game</button>
+    </div>
+    
+    <!-- Lobby Screen -->
+    <div id="lobby-screen" class="screen">
+        <h1>🎬 Lobby</h1>
+        <div class="info-box">
+            <h2 id="studioName"></h2>
+            <p>💰 Budget: $<span id="lobbyMoney">100</span>M</p>
+        </div>
+        <p>Waiting for host to start the game...</p>
+    </div>
+    
+    <!-- Phase 0 Naming Screen -->
+    <div id="naming-screen" class="screen">
+        <h1>🎬 Name the Talent</h1>
+        <div class="info-box">
+            <h2>Name your <span id="roleType"></span></h2>
+            <p id="roleProgress"></p>
+            <p style="font-size: 14px; color: #aaa;">A name is suggested - edit it or submit as-is!</p>
+        </div>
+        <input type="text" id="talentName" placeholder="Enter name">
+        <button onclick="submitName()" id="submit-btn">Submit</button>
+    </div>
+    
+    <!-- Phase 0 Complete Screen -->
+    <div id="phase0-complete-screen" class="screen">
+        <h1>🎬 Talent Pool Created!</h1>
+        <div class="info-box">
+            <p>All talent has been generated and assigned stats.</p>
+            <p>Waiting for host to start production phase...</p>
+        </div>
+    </div>
+    
+    <!-- Phase 1 Production Screen -->
+    <div id="phase1-screen" class="screen">
+        <h1>🎬 Year <span id="year">1</span>, Turn <span id="turnNum">1</span></h1>
+        <div class="info-box">
+            <h2 id="studioNameP1"></h2>
+            <p>💰 Budget: $<span id="p1Money">100</span>M</p>
+            <p id="roleInventory"></p>
+        </div>
+        <div id="cards-area"></div>
+        <div id="selection-status"></div>
+    </div>
+    
+    <!-- Phase 1 Packaging Screen -->
+    <div id="packaging-screen" class="screen">
+        <h1>🎬 Package Your Spring Films</h1>
+        <div class="info-box">
+            <h2 id="studioNamePkg"></h2>
+            <p>💰 Budget: $<span id="pkgMoney">100</span>M</p>
+            <p id="pkgRoleInventory"></p>
+        </div>
+        
+        <h3>Your Available Roles:</h3>
+        <div id="available-roles"></div>
+        
+        <h3>Current Film Package:</h3>
+        <div id="current-package" class="info-box">
+            <p><em>Select roles below to add to your film...</em></p>
+        </div>
+        
+        <div id="package-actions" style="display:none;">
+            <input type="text" id="filmTitle" placeholder="Film Title" style="margin: 10px 0;">
+            <textarea id="filmTeaser" placeholder="Short teaser (optional)" 
+                      style="width: 100%; height: 60px; padding: 10px; background: #333; color: white; border: 1px solid #666; margin: 10px 0;"></textarea>
+            <button onclick="greenlight()">Greenlight This Film!</button>
+            <button onclick="clearPackage()" style="background: #666;">Clear Package</button>
+        </div>
+        
+        <h3>Your Greenlit Films:</h3>
+        <div id="greenlit-films"></div>
+        
+        <button onclick="finishPackaging()" id="finish-pkg-btn">Done Packaging (Releases Remaining Roles)</button>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/player.js') }}"></script>
+</body>
+</html>

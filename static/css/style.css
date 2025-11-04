@@ -1,0 +1,157 @@
+/* Hollywood Moguls - Shared Styles */
+
+body {
+    font-family: Arial, sans-serif;
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 20px;
+    background: #1a1a1a;
+    color: #fff;
+}
+
+h1 { 
+    color: #e50914; 
+    margin-top: 0;
+}
+
+h2, h3, h4 {
+    color: #fff;
+}
+
+.player-card {
+    border: 2px solid #e50914;
+    padding: 15px;
+    margin: 10px;
+    display: inline-block;
+    background: #2a2a2a;
+    border-radius: 5px;
+}
+
+button {
+    padding: 12px 24px;
+    margin: 5px 0;
+    font-size: 16px;
+    background: #e50914;
+    color: white;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+button:hover { 
+    background: #f40612; 
+}
+
+button:disabled { 
+    background: #666; 
+    cursor: not-allowed; 
+}
+
+input, textarea {
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    font-size: 18px;
+    box-sizing: border-box;
+    background: #333;
+    color: white;
+    border: 1px solid #666;
+    border-radius: 5px;
+}
+
+input:focus, textarea:focus {
+    outline: none;
+    border-color: #e50914;
+}
+
+.phase-info {
+    background: #2a2a2a;
+    padding: 20px;
+    margin: 20px 0;
+    border-left: 4px solid #e50914;
+    border-radius: 5px;
+}
+
+.talent-card, .info-box {
+    background: #333;
+    padding: 15px;
+    margin: 10px;
+    border-radius: 5px;
+    min-width: 200px;
+}
+
+.talent-card {
+    display: inline-block;
+}
+
+.info-box {
+    display: block;
+}
+
+.submissions {
+    background: #2a2a2a;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+
+.screen {
+    display: none;
+}
+
+.screen.active {
+    display: block;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+        margin: 10px;
+    }
+    
+    .talent-card {
+        min-width: auto;
+        width: 100%;
+        display: block;
+    }
+    
+    .player-card {
+        display: block;
+        width: 100%;
+    }
+    
+    h1 {
+        font-size: 24px;
+    }
+    
+    button {
+        font-size: 16px;
+        padding: 15px;
+    }
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.screen.active {
+    animation: fadeIn 0.3s ease-in;
+}
+
+/* Utility classes */
+.text-center {
+    text-align: center;
+}
+
+.mt-10 {
+    margin-top: 10px;
+}
+
+.mb-10 {
+    margin-bottom: 10px;
+}

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hollywood Game - Host</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>🎬 Hollywood Moguls - Host View</h1>
+    <p>Players connect at: <strong>http://YOUR_LOCAL_IP:8080/player</strong></p>
+    
+    <div class="phase-info">
+        <h2>Phase: <span id="phase">Lobby</span></h2>
+        <div id="phase-details"></div>
+    </div>
+    
+    <div id="players"></div>
+    
+    <div id="controls">
+        <button onclick="startPhase0()" id="start-btn">Start Game (Phase 0)</button>
+    </div>
+    
+    <div id="content"></div>
+    
+    <script src="{{ url_for('static', filename='js/host.js') }}"></script>
+</body>
+</html>
