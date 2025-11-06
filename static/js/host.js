@@ -73,7 +73,7 @@ function updateDisplay(state) {
         document.getElementById('start-btn').innerHTML = 'Start Phase 1 (Production)';
         document.getElementById('start-btn').onclick = startPhase1;
     } else if (state.phase === 'phase1_production') {
-        detailsDiv.innerHTML = `<p>Year ${state.year}, Turn ${state.turn} of 5</p>`;
+        detailsDiv.innerHTML = `<p>☃️ Winter - Year ${state.year}, Turn ${state.turn} of 5</p>`;
         contentDiv.innerHTML = '<h3>Available Roles This Turn:</h3>';
         
         state.current_turn_cards.forEach((card, i) => {

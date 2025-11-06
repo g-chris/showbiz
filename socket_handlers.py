@@ -200,13 +200,26 @@ def register_handlers(socketio, game_state):
         """Move to next turn or phase"""
         game_state.turn += 1
         
+        # Determine which phase we're in
+        current_phase = game_state.phase
+        
         if game_state.turn <= 5:
-            game_state.phase = 'phase1_production'
+            # Continue current production phase
+            if current_phase == 'phase1_production':
+                game_state.phase = 'phase1_production'
+                print(f"\n=== Starting Turn {game_state.turn} ===\n")
+            elif current_phase == 'phase2_production':
+                game_state.phase = 'phase2_production'
+                print(f"\n=== Starting Turn {game_state.turn} ===\n")
             start_new_turn()
-            print(f"\n=== Starting Turn {game_state.turn} ===\n")
         else:
-            game_state.phase = 'phase1_packaging'
-            print("\n=== Winter production complete! Packaging phase ===\n")
+            # Move to packaging phase
+            if current_phase == 'phase1_production':
+                game_state.phase = 'phase1_packaging'
+                print("\n=== Winter production complete! Packaging phase ===\n")
+            elif current_phase == 'phase2_production':
+                game_state.phase = 'phase2_packaging'
+                print("\n=== Summer production complete! Packaging phase ===\n")
             
             for sid, player in game_state.players.items():
                 role_count = len(player.get('roles', []))
@@ -273,40 +286,39 @@ def register_handlers(socketio, game_state):
             print(f"{player['name']} released {len(player['roles'])} roles for ${refund}M")
             player['roles'] = []
         
-        player['spring_ready'] = True
-        
-        # Check if all players ready
-        if all(p.get('spring_ready', False) for p in game_state.players.values()):
-            start_spring_releases()
+        # Determine which phase we're in
+        if game_state.phase == 'phase1_packaging':
+            player['spring_ready'] = True
+            # Check if all players ready
+            if all(p.get('spring_ready', False) for p in game_state.players.values()):
+                start_releases('Spring', 'phase1_releases')
+        elif game_state.phase == 'phase2_packaging':
+            player['holiday_ready'] = True
+            # Check if all players ready
+            if all(p.get('holiday_ready', False) for p in game_state.players.values()):
+                start_releases('Holiday', 'phase2_releases')
         
         broadcast_game_state()
     
-    def start_spring_releases():
-        """Calculate box office for all films and move to releases phase"""
-        import random
+    def start_releases(season_name, phase_name):
+        """Generic function to handle any release phase"""
+        game_state.phase = phase_name
+        game_logic.process_film_releases(game_state.players, season_name)
+        broadcast_game_state()
+    
+    @socketio.on('continue_to_summer')
+    def handle_continue_to_summer():
+        """Start Phase 2: Summer Production"""
+        print("\n=== Starting Phase 2: Summer Production ===\n")
+        game_state.phase = 'phase2_production'
+        game_state.turn = 1
         
-        print("\n=== SPRING RELEASES ===\n")
-        game_state.phase = 'phase1_releases'
+        # Reset ready flags
+        for player in game_state.players.values():
+            player['spring_ready'] = False
+            player['holiday_ready'] = False
         
-        # Calculate box office for each player's films
-        for sid, player in game_state.players.items():
-            if player.get('films'):
-                for film in player['films']:
-                    # Calculate box office: Heat * random multiplier (0.1 to 2.5)
-                    multiplier = random.uniform(0.1, 2.5)
-                    box_office = int(film['heat'] * multiplier)
-                    film['box_office'] = box_office
-                    film['multiplier'] = round(multiplier, 2)
-                    
-                    # Add to player's money
-                    player['money'] += box_office
-                    player['score'] += box_office  # Score = total money earned
-                    
-                    print(f"{player['name']}: '{film['title']}'")
-                    print(f"  Heat: {film['heat']} x {multiplier:.2f} = ${box_office}M")
-                    print(f"  New balance: ${player['money']}M")
-        
-        print("\n=== BOX OFFICE COMPLETE ===\n")
+        start_new_turn()
         broadcast_game_state()
     
     @socketio.on('disconnect')

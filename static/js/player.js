@@ -123,65 +123,57 @@ socket.on('game_update', (data) => {
     } else if (data.phase === 'phase1_production') {
         showScreen('phase1-screen');
         document.getElementById('year').textContent = data.year;
-        document.getElementById('turnNum').textContent = data.turn;
+        document.getElementById('turnNum').textContent = `☃️ Winter Turn ${data.turn}`;
         
         console.log('Phase 1 - cards:', data.current_turn_cards);
         
         updateRoleInventory(myData.roles || [], 'roleInventory');
+        renderProductionCards(data, myData);
         
-        const cardsArea = document.getElementById('cards-area');
-        cardsArea.innerHTML = '';
+    } else if (data.phase === 'phase2_production') {
+        showScreen('phase1-screen'); // Reuse same screen
+        document.getElementById('year').textContent = data.year;
+        document.getElementById('turnNum').textContent = `☀️ Summer Turn ${data.turn}`;
         
-        if (!data.current_turn_cards || data.current_turn_cards.length === 0) {
-            cardsArea.innerHTML = '<p style="color: red;">ERROR: No cards available!</p>';
-            return;
-        }
+        console.log('Phase 2 - cards:', data.current_turn_cards);
         
-        cardsArea.innerHTML = '<h3>Select a Role:</h3>';
+        updateRoleInventory(myData.roles || [], 'roleInventory');
+        renderProductionCards(data, myData);
         
-        data.current_turn_cards.forEach((card, index) => {
-            const selected = data.player_selections[socket.id] === index;
-            const disabled = data.player_selections[socket.id] !== undefined;
-            const canAfford = myData.money >= card.salary;
-            
-            cardsArea.innerHTML += `
-                <div class="info-box" style="margin: 10px 0; ${selected ? 'border: 2px solid #e50914;' : ''} ${!canAfford ? 'opacity: 0.5;' : ''}">
-                    <h3>${card.name}</h3>
-                    <p><strong>${card.role.toUpperCase()}</strong></p>
-                    <p>Heat: ${card.heat_bucket} | Prestige: ${card.prestige_bucket}</p>
-                    <p>Salary: $${card.salary}M ${!canAfford ? '❌ TOO EXPENSIVE' : ''}</p>
-                    ${card.genre ? `<p>Genre: ${card.genre}</p>` : ''}
-                    ${card.audience ? `<p>Audience: ${card.audience}</p>` : ''}
-                    <button onclick="selectCard(${index})" ${disabled || !canAfford ? 'disabled' : ''}>
-                        ${selected ? 'Selected ✓' : canAfford ? 'Select' : 'Cannot Afford'}
-                    </button>
-                </div>
-            `;
-        });
+    } else if (data.phase === 'phase1_production') {
+        showScreen('phase1-screen');
+        document.getElementById('year').textContent = data.year;
+        document.getElementById('turnNum').textContent = `☃️ Winter Turn ${data.turn}`;
         
-        const passDisabled = data.player_selections[socket.id] !== undefined;
-        const passSelected = data.player_selections[socket.id] === 'pass';
-        cardsArea.innerHTML += `
-            <button onclick="selectPass()" ${passDisabled ? 'disabled' : ''} 
-                    style="background: #666; margin-top: 10px;">
-                ${passSelected ? 'Passed ✓' : 'Pass This Turn'}
-            </button>
-        `;
+        console.log('Phase 1 - cards:', data.current_turn_cards);
         
-        const statusDiv = document.getElementById('selection-status');
-        if (data.player_selections[socket.id] !== undefined) {
-            statusDiv.innerHTML = '<p style="color: #e50914;">✓ Selection made! Waiting for other players...</p>';
-        } else {
-            statusDiv.innerHTML = '';
-        }
+        updateRoleInventory(myData.roles || [], 'roleInventory');
+        renderProductionCards(data, myData);
+        
+    } else if (data.phase === 'phase2_production') {
+        showScreen('phase1-screen'); // Reuse same screen
+        document.getElementById('year').textContent = data.year;
+        document.getElementById('turnNum').textContent = `☀️ Summer Turn ${data.turn}`;
+        
+        console.log('Phase 2 - cards:', data.current_turn_cards);
+        
+        updateRoleInventory(myData.roles || [], 'roleInventory');
+        renderProductionCards(data, myData);
         
     } else if (data.phase === 'phase1_packaging') {
         showScreen('packaging-screen');
-        console.log('Packaging - my roles:', myData.roles);
+        console.log('Spring Packaging - my roles:', myData.roles);
+        updatePackagingView(data, myData);
+    } else if (data.phase === 'phase2_packaging') {
+        showScreen('packaging-screen');
+        console.log('Holiday Packaging - my roles:', myData.roles);
         updatePackagingView(data, myData);
     } else if (data.phase === 'phase1_releases') {
         showScreen('releases-screen');
-        updateReleasesView(data, myData);
+        updateReleasesView(data, myData, 'Spring');
+    } else if (data.phase === 'phase2_releases') {
+        showScreen('releases-screen');
+        updateReleasesView(data, myData, 'Holiday');
     }
 });
 
@@ -224,6 +216,54 @@ function updateRoleInventory(roles, elementId) {
         🎬 ${counts.director} Director | 
         ⭐ ${counts.star} Star
     `;
+}
+
+function renderProductionCards(data, myData) {
+    const cardsArea = document.getElementById('cards-area');
+    cardsArea.innerHTML = '';
+    
+    if (!data.current_turn_cards || data.current_turn_cards.length === 0) {
+        cardsArea.innerHTML = '<p style="color: red;">ERROR: No cards available!</p>';
+        return;
+    }
+    
+    cardsArea.innerHTML = '<h3>Select a Role:</h3>';
+    
+    data.current_turn_cards.forEach((card, index) => {
+        const selected = data.player_selections[socket.id] === index;
+        const disabled = data.player_selections[socket.id] !== undefined;
+        const canAfford = myData.money >= card.salary;
+        
+        cardsArea.innerHTML += `
+            <div class="info-box" style="margin: 10px 0; ${selected ? 'border: 2px solid #e50914;' : ''} ${!canAfford ? 'opacity: 0.5;' : ''}">
+                <h3>${card.name}</h3>
+                <p><strong>${card.role.toUpperCase()}</strong></p>
+                <p>Heat: ${card.heat_bucket} | Prestige: ${card.prestige_bucket}</p>
+                <p>Salary: ${card.salary}M ${!canAfford ? '❌ TOO EXPENSIVE' : ''}</p>
+                ${card.genre ? `<p>Genre: ${card.genre}</p>` : ''}
+                ${card.audience ? `<p>Audience: ${card.audience}</p>` : ''}
+                <button onclick="selectCard(${index})" ${disabled || !canAfford ? 'disabled' : ''}>
+                    ${selected ? 'Selected ✓' : canAfford ? 'Select' : 'Cannot Afford'}
+                </button>
+            </div>
+        `;
+    });
+    
+    const passDisabled = data.player_selections[socket.id] !== undefined;
+    const passSelected = data.player_selections[socket.id] === 'pass';
+    cardsArea.innerHTML += `
+        <button onclick="selectPass()" ${passDisabled ? 'disabled' : ''} 
+                style="background: #666; margin-top: 10px;">
+            ${passSelected ? 'Passed ✓' : 'Pass This Turn'}
+        </button>
+    `;
+    
+    const statusDiv = document.getElementById('selection-status');
+    if (data.player_selections[socket.id] !== undefined) {
+        statusDiv.innerHTML = '<p style="color: #e50914;">✓ Selection made! Waiting for other players...</p>';
+    } else {
+        statusDiv.innerHTML = '';
+    }
 }
 
 function updatePackagingView(gameData, playerData) {

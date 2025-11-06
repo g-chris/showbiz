@@ -153,7 +153,7 @@ def handle_duplicate_names(talent_list):
 def generate_turn_cards(game_state):
     """Generate cards for the current turn"""
     num_players = len(game_state.players)
-    num_cards = num_players + 2
+    num_cards = num_players + 2  # Changed from +1 to +2 for more options
     
     cards = []
     
@@ -194,3 +194,67 @@ def calculate_film_stats(roles):
         'genre': genre,
         'audience': audience
     }
+
+def calculate_box_office(film):
+    """
+    Calculate box office revenue for a film.
+    PLACEHOLDER: Heat * random multiplier (0.1 to 2.5)
+    This is where we'll update the formula when we refine the game balance.
+    """
+    import random
+    multiplier = random.uniform(0.1, 2.5)
+    box_office = int(film['heat'] * multiplier)
+    
+    return {
+        'box_office': box_office,
+        'multiplier': round(multiplier, 2)
+    }
+
+def process_film_releases(players, season_name='Spring'):
+    """
+    Process all film releases for a season and calculate box office.
+    This is the single source of truth for release calculations.
+    
+    Args:
+        players: Dictionary of player objects
+        season_name: String name of the season (for logging)
+    
+    Returns:
+        List of all films with box office results
+    """
+    import random
+    
+    print(f"\n=== {season_name.upper()} RELEASES ===\n")
+    
+    all_films = []
+    
+    for sid, player in players.items():
+        if player.get('films'):
+            for film in player['films']:
+                # Only calculate box office if not already calculated
+                if 'box_office' not in film:
+                    # Calculate box office using our single formula
+                    results = calculate_box_office(film)
+                    film.update(results)
+                    
+                    # Add earnings to player
+                    player['money'] += film['box_office']
+                    player['score'] += film['box_office']
+                    
+                    print(f"{player['name']}: '{film['title']}'")
+                    print(f"  Heat: {film['heat']} x {film['multiplier']:.2f} = ${film['box_office']}M")
+                    print(f"  New balance: ${player['money']}M")
+                    
+                all_films.append({
+                    **film,
+                    'studio': player['name'],
+                    'season': season_name
+                })
+        
+        # IMPORTANT: Clear any leftover roles after releases
+        # Players should never carry roles between production phases
+        player['roles'] = []
+        print(f"  {player['name']}'s unused roles cleared")
+    
+    print(f"\n=== {season_name.upper()} BOX OFFICE COMPLETE ===\n")
+    return all_films
