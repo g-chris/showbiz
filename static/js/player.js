@@ -43,7 +43,7 @@ socket.on('selection_error', (data) => {
     alert(data.message);
 });
 
-socket.on('package_error', (data) => {
+socket.on('vote_error', (data) => {
     alert(data.message);
 });
 

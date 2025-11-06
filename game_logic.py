@@ -258,3 +258,145 @@ def process_film_releases(players, season_name='Spring'):
     
     print(f"\n=== {season_name.upper()} BOX OFFICE COMPLETE ===\n")
     return all_films
+
+# ============================================================================
+# AWARD SEASON SYSTEM
+# ============================================================================
+
+class AwardCategory:
+    """Represents an award category with its rules"""
+    
+    def __init__(self, name, nominees_count=5, scoring_attribute='prestige', 
+                 can_vote_for_own=False, points_value=50):
+        self.name = name
+        self.nominees_count = nominees_count
+        self.scoring_attribute = scoring_attribute
+        self.can_vote_for_own = can_vote_for_own
+        self.points_value = points_value
+    
+    def get_nominees(self, all_films):
+        """
+        Get the top nominees for this category.
+        Returns list of films sorted by the scoring attribute.
+        """
+        # Sort films by the scoring attribute (e.g., prestige)
+        sorted_films = sorted(
+            all_films, 
+            key=lambda f: f.get(self.scoring_attribute, 0), 
+            reverse=True
+        )
+        
+        # Return top N
+        return sorted_films[:self.nominees_count]
+    
+    def calculate_winner(self, votes, nominees):
+        """
+        Calculate the winner based on votes.
+        
+        Args:
+            votes: Dict of {player_sid: film_index}
+            nominees: List of nominated films
+        
+        Returns:
+            Winning film or None if no votes
+        """
+        if not votes:
+            return None
+        
+        # Count votes for each film
+        vote_counts = {}
+        for film_index in votes.values():
+            vote_counts[film_index] = vote_counts.get(film_index, 0) + 1
+        
+        # Find max votes
+        max_votes = max(vote_counts.values())
+        
+        # Get all films with max votes (for tie-breaking)
+        tied_films = [idx for idx, count in vote_counts.items() if count == max_votes]
+        
+        if len(tied_films) == 1:
+            return nominees[tied_films[0]]
+        else:
+            # Tie-breaker: highest prestige
+            winner_idx = max(
+                tied_films, 
+                key=lambda idx: nominees[idx].get(self.scoring_attribute, 0)
+            )
+            return nominees[winner_idx]
+
+# Define available award categories
+AWARD_CATEGORIES = {
+    'best_picture': AwardCategory(
+        name='Best Picture',
+        nominees_count=5,
+        scoring_attribute='prestige',
+        can_vote_for_own=False,
+        points_value=50
+    ),
+    'best_actor': AwardCategory(
+        name='Best Actor',
+        nominees_count=5,
+        scoring_attribute='prestige',  # Could be customized later
+        can_vote_for_own=False,
+        points_value=30
+    ),
+    'best_screenplay': AwardCategory(
+        name='Best Screenplay',
+        nominees_count=5,
+        scoring_attribute='prestige',
+        can_vote_for_own=False,
+        points_value=30
+    )
+}
+
+def get_all_films_from_players(players):
+    """Collect all films from all players"""
+    all_films = []
+    for sid, player in players.items():
+        if player.get('films'):
+            for film in player['films']:
+                all_films.append({
+                    **film,
+                    'studio': player['name'],
+                    'player_sid': sid
+                })
+    return all_films
+
+def setup_awards(players, active_categories=['best_picture']):
+    """
+    Set up award season with specified categories.
+    
+    Args:
+        players: Dictionary of player objects
+        active_categories: List of category keys to activate this season
+    
+    Returns:
+        Dictionary with award setup info
+    """
+    all_films = get_all_films_from_players(players)
+    
+    awards_data = {
+        'categories': {},
+        'current_category': None,
+        'current_category_index': 0,
+        'active_categories': active_categories
+    }
+    
+    # Set up each active category
+    for cat_key in active_categories:
+        category = AWARD_CATEGORIES[cat_key]
+        nominees = category.get_nominees(all_films)
+        
+        awards_data['categories'][cat_key] = {
+            'name': category.name,
+            'nominees': nominees,
+            'votes': {},  # {player_sid: nominee_index}
+            'winner': None,
+            'points_value': category.points_value
+        }
+    
+    # Start with first category
+    if active_categories:
+        awards_data['current_category'] = active_categories[0]
+    
+    return awards_data

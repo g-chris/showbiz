@@ -321,6 +321,83 @@ def register_handlers(socketio, game_state):
         start_new_turn()
         broadcast_game_state()
     
+    @socketio.on('start_awards')
+    def handle_start_awards():
+        """Start Award Season"""
+        print("\n=== Starting Award Season ===\n")
+        game_state.phase = 'awards_voting'
+        
+        # Set up awards (just Best Picture for now)
+        awards_data = game_logic.setup_awards(game_state.players, active_categories=['best_picture'])
+        game_state.awards = awards_data
+        
+        print(f"Award Season initialized with categories: {awards_data['active_categories']}")
+        print(f"Current category: {awards_data['current_category']}")
+        
+        broadcast_game_state()
+    
+    @socketio.on('vote_for_nominee')
+    def handle_vote(data):
+        """Player votes for a nominee"""
+        nominee_index = data['nominee_index']
+        
+        if not hasattr(game_state, 'awards') or not game_state.awards:
+            return
+        
+        current_cat_key = game_state.awards['current_category']
+        category = game_state.awards['categories'][current_cat_key]
+        nominees = category['nominees']
+        
+        # Validate vote
+        if nominee_index >= len(nominees):
+            emit('vote_error', {'message': 'Invalid nominee selection!'})
+            return
+        
+        # Check if voting for own film
+        selected_film = nominees[nominee_index]
+        voter_studio = game_state.players[request.sid]['name']
+        
+        if selected_film.get('studio') == voter_studio:
+            emit('vote_error', {'message': 'Cannot vote for your own film!'})
+            return
+        
+        # Record vote
+        category['votes'][request.sid] = nominee_index
+        player_name = game_state.players[request.sid]['name']
+        print(f"{player_name} voted for nominee {nominee_index}: {selected_film['title']}")
+        
+        # Check if all players have voted
+        if len(category['votes']) == len(game_state.players):
+            calculate_award_winner(current_cat_key)
+        
+        broadcast_game_state()
+    
+    def calculate_award_winner(category_key):
+        """Calculate the winner for a category"""
+        category_data = game_state.awards['categories'][category_key]
+        category = game_logic.AWARD_CATEGORIES[category_key]
+        
+        winner = category.calculate_winner(
+            category_data['votes'], 
+            category_data['nominees']
+        )
+        
+        if winner:
+            category_data['winner'] = winner
+            
+            # Award points to the studio
+            winner_studio = winner.get('studio')
+            for sid, player in game_state.players.items():
+                if player['name'] == winner_studio:
+                    player['score'] += category.points_value
+                    print(f"\n🏆 {category.name} WINNER: {winner['title']} ({winner_studio})")
+                    print(f"   +{category.points_value} points awarded!")
+                    break
+        
+        # Move to results phase
+        game_state.phase = 'awards_results'
+        broadcast_game_state()
+    
     @socketio.on('disconnect')
     def handle_disconnect():
         if request.sid in game_state.players:

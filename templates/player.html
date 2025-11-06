@@ -106,6 +106,27 @@
         <button onclick="continueGame()" id="continue-btn" style="margin-top: 20px;">Continue to Next Phase</button>
     </div>
     
+    <!-- Awards Voting Screen -->
+    <div id="awards-screen" class="screen">
+        <h1>🏆 Award Season</h1>
+        <div class="info-box">
+            <h2 id="awardCategory">Best Picture</h2>
+            <p id="votingInstructions">Vote for the best film (you cannot vote for your own)</p>
+        </div>
+        
+        <h3>Nominees:</h3>
+        <div id="nominees-area"></div>
+        
+        <div id="vote-status"></div>
+    </div>
+    
+    <!-- Awards Results Screen -->
+    <div id="awards-results-screen" class="screen">
+        <h1>🏆 And the winner is...</h1>
+        <div id="winner-announcement"></div>
+        <div id="final-standings"></div>
+    </div>
+    
     <script src="{{ url_for('static', filename='js/player.js') }}"></script>
 </body>
 </html>
