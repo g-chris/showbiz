@@ -213,7 +213,7 @@ def register_handlers(socketio, game_state):
                 print(f"\n=== Starting Turn {game_state.turn} ===\n")
             start_new_turn()
         else:
-            # Move to packaging phase
+            # Move to packaging phase and provide no-name talent
             if current_phase == 'phase1_production':
                 game_state.phase = 'phase1_packaging'
                 print("\n=== Winter production complete! Packaging phase ===\n")
@@ -221,9 +221,13 @@ def register_handlers(socketio, game_state):
                 game_state.phase = 'phase2_packaging'
                 print("\n=== Summer production complete! Packaging phase ===\n")
             
+            # Give each player access to no-name talent
+            no_name_talent = game_logic.generate_no_name_talent()
+            game_state.no_name_talent = no_name_talent
+            
             for sid, player in game_state.players.items():
                 role_count = len(player.get('roles', []))
-                print(f"  {player['name']} has {role_count} roles")
+                print(f"  {player['name']} has {role_count} roles + no-name talent available")
         
         broadcast_game_state()
     
@@ -238,15 +242,25 @@ def register_handlers(socketio, game_state):
         title = data['title'].strip()
         teaser = data.get('teaser', '').strip()
         
-        if not player.get('roles'):
-            return
-        
         if not title:
             emit('package_error', {'message': 'Film title is required!'})
             return
         
-        # Extract roles
-        roles = [player['roles'][i] for i in role_indices if i < len(player['roles'])]
+        # Extract roles (handle both regular and no-name talent)
+        roles = []
+        no_name_talent = game_state.no_name_talent
+        
+        for idx in role_indices:
+            if idx < 0:
+                # No-name talent (negative index)
+                no_name_array = list(no_name_talent.values())
+                role_idx = abs(idx) - 1
+                if role_idx < len(no_name_array):
+                    roles.append(no_name_array[role_idx].copy())
+            else:
+                # Regular purchased role
+                if player.get('roles') and idx < len(player['roles']):
+                    roles.append(player['roles'][idx])
         
         # Validate package
         if not game_logic.validate_film_package(roles):
@@ -267,8 +281,9 @@ def register_handlers(socketio, game_state):
             player['films'] = []
         player['films'].append(film)
         
-        # Remove roles
-        for idx in sorted(role_indices, reverse=True):
+        # Remove ONLY purchased roles (not no-name talent)
+        purchased_indices = [idx for idx in role_indices if idx >= 0]
+        for idx in sorted(purchased_indices, reverse=True):
             if idx < len(player['roles']):
                 player['roles'].pop(idx)
         
@@ -325,14 +340,21 @@ def register_handlers(socketio, game_state):
     def handle_start_awards():
         """Start Award Season"""
         print("\n=== Starting Award Season ===\n")
-        game_state.phase = 'awards_voting'
         
         # Set up awards (just Best Picture for now)
         awards_data = game_logic.setup_awards(game_state.players, active_categories=['best_picture'])
+        
+        if not awards_data:
+            print("Not enough films for awards! Skipping to final results.")
+            game_state.phase = 'game_complete'
+            broadcast_game_state()
+            return
+        
+        game_state.phase = 'awards_voting'
         game_state.awards = awards_data
         
         print(f"Award Season initialized with categories: {awards_data['active_categories']}")
-        print(f"Current category: {awards_data['current_category']}")
+        print(f"Nominees: {len(awards_data['categories']['best_picture']['nominees'])} films")
         
         broadcast_game_state()
     

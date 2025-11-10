@@ -43,6 +43,10 @@ socket.on('selection_error', (data) => {
     alert(data.message);
 });
 
+socket.on('package_error', (data) => {
+    alert(data.message);
+});
+
 socket.on('vote_error', (data) => {
     alert(data.message);
 });
@@ -131,27 +135,7 @@ socket.on('game_update', (data) => {
         renderProductionCards(data, myData);
         
     } else if (data.phase === 'phase2_production') {
-        showScreen('phase1-screen'); // Reuse same screen
-        document.getElementById('year').textContent = data.year;
-        document.getElementById('turnNum').textContent = `☀️ Summer Turn ${data.turn}`;
-        
-        console.log('Phase 2 - cards:', data.current_turn_cards);
-        
-        updateRoleInventory(myData.roles || [], 'roleInventory');
-        renderProductionCards(data, myData);
-        
-    } else if (data.phase === 'phase1_production') {
         showScreen('phase1-screen');
-        document.getElementById('year').textContent = data.year;
-        document.getElementById('turnNum').textContent = `☃️ Winter Turn ${data.turn}`;
-        
-        console.log('Phase 1 - cards:', data.current_turn_cards);
-        
-        updateRoleInventory(myData.roles || [], 'roleInventory');
-        renderProductionCards(data, myData);
-        
-    } else if (data.phase === 'phase2_production') {
-        showScreen('phase1-screen'); // Reuse same screen
         document.getElementById('year').textContent = data.year;
         document.getElementById('turnNum').textContent = `☀️ Summer Turn ${data.turn}`;
         
@@ -174,6 +158,12 @@ socket.on('game_update', (data) => {
     } else if (data.phase === 'phase2_releases') {
         showScreen('releases-screen');
         updateReleasesView(data, myData, 'Holiday');
+    } else if (data.phase === 'awards_voting') {
+        showScreen('awards-screen');
+        updateAwardsVotingView(data, myData);
+    } else if (data.phase === 'awards_results') {
+        showScreen('awards-results-screen');
+        updateAwardsResultsView(data, myData);
     }
 });
 
@@ -239,7 +229,7 @@ function renderProductionCards(data, myData) {
                 <h3>${card.name}</h3>
                 <p><strong>${card.role.toUpperCase()}</strong></p>
                 <p>Heat: ${card.heat_bucket} | Prestige: ${card.prestige_bucket}</p>
-                <p>Salary: ${card.salary}M ${!canAfford ? '❌ TOO EXPENSIVE' : ''}</p>
+                <p>Salary: $${card.salary}M ${!canAfford ? '❌ TOO EXPENSIVE' : ''}</p>
                 ${card.genre ? `<p>Genre: ${card.genre}</p>` : ''}
                 ${card.audience ? `<p>Audience: ${card.audience}</p>` : ''}
                 <button onclick="selectCard(${index})" ${disabled || !canAfford ? 'disabled' : ''}>
@@ -268,14 +258,49 @@ function renderProductionCards(data, myData) {
 
 function updatePackagingView(gameData, playerData) {
     const availableRoles = playerData.roles || [];
+    const noNameTalent = gameData.no_name_talent || {};
+    
+    // DEBUG: Log what we're receiving
+    console.log('=== PACKAGING DEBUG ===');
+    console.log('Game data:', gameData);
+    console.log('No-name talent:', noNameTalent);
+    console.log('No-name talent keys:', Object.keys(noNameTalent));
+    console.log('No-name talent values:', Object.values(noNameTalent));
     
     updateRoleInventory(availableRoles, 'pkgRoleInventory');
     
     const rolesDiv = document.getElementById('available-roles');
     rolesDiv.innerHTML = '';
     
+    // Show no-name talent first (if available)
+    if (Object.keys(noNameTalent).length > 0) {
+        rolesDiv.innerHTML += '<h4 style="color: #888;">Budget Indie Talent (Always Available):</h4>';
+        
+        // Convert no-name talent to array with special negative indices
+        Object.values(noNameTalent).forEach((role, idx) => {
+            const specialIndex = -(idx + 1);
+            const inPackage = currentPackage.includes(specialIndex);
+            
+            rolesDiv.innerHTML += `
+                <div class="info-box" style="margin: 10px 0; border: 1px dashed #666; ${inPackage ? 'border: 2px solid #e50914;' : ''}">
+                    <strong>${role.name}</strong> (${role.role.toUpperCase()})<br>
+                    Heat: ${role.heat_bucket} | Prestige: ${role.prestige_bucket}<br>
+                    Salary: ${role.salary}M<br>
+                    ${role.genre ? `Genre: ${role.genre}<br>` : ''}
+                    ${role.audience ? `Audience: ${role.audience}<br>` : ''}
+                    <button onclick="toggleRole(${specialIndex})">
+                        ${inPackage ? 'Remove from Film' : 'Add to Film'}
+                    </button>
+                </div>
+            `;
+        });
+        
+        rolesDiv.innerHTML += '<h4 style="margin-top: 20px;">Your Purchased Talent:</h4>';
+    }
+    
+    // Show purchased roles
     if (availableRoles.length === 0) {
-        rolesDiv.innerHTML = '<p><em>No roles available</em></p>';
+        rolesDiv.innerHTML += '<p><em>No purchased roles (use budget indie talent above)</em></p>';
     } else {
         availableRoles.forEach((role, index) => {
             const inPackage = currentPackage.includes(index);
@@ -283,7 +308,7 @@ function updatePackagingView(gameData, playerData) {
                 <div class="info-box" style="margin: 10px 0; ${inPackage ? 'border: 2px solid #e50914;' : ''}">
                     <strong>${role.name}</strong> (${role.role.toUpperCase()})<br>
                     Heat: ${role.heat_bucket} | Prestige: ${role.prestige_bucket}<br>
-                    Salary: $${role.salary}M<br>
+                    Salary: ${role.salary}M<br>
                     ${role.genre ? `Genre: ${role.genre}<br>` : ''}
                     ${role.audience ? `Audience: ${role.audience}<br>` : ''}
                     <button onclick="toggleRole(${index})">
@@ -294,7 +319,7 @@ function updatePackagingView(gameData, playerData) {
         });
     }
     
-    updatePackageDisplay(availableRoles);
+    updatePackageDisplay(availableRoles, noNameTalent);
     updateGreenlitDisplay();
 }
 
@@ -307,7 +332,7 @@ function toggleRole(index) {
     socket.emit('request_update');
 }
 
-function updatePackageDisplay(availableRoles) {
+function updatePackageDisplay(availableRoles, noNameTalent) {
     const packageDiv = document.getElementById('current-package');
     const actionsDiv = document.getElementById('package-actions');
     
@@ -322,7 +347,17 @@ function updatePackageDisplay(availableRoles) {
     
     packageDiv.innerHTML = '<h4>Roles in this film:</h4>';
     currentPackage.forEach(idx => {
-        const role = availableRoles[idx];
+        let role;
+        
+        if (idx < 0) {
+            const noNameArray = Object.values(noNameTalent);
+            role = noNameArray[Math.abs(idx) - 1];
+        } else {
+            role = availableRoles[idx];
+        }
+        
+        if (!role) return;
+        
         packageDiv.innerHTML += `<p>• ${role.name} (${role.role.toUpperCase()})</p>`;
         
         if (role.role === 'producer') hasProducer = true;
@@ -398,8 +433,16 @@ function finishPackaging() {
     }
 }
 
-function updateReleasesView(gameData, playerData) {
-    // Show player's own films
+function updateReleasesView(gameData, playerData, seasonName) {
+    const continueBtn = document.getElementById('continue-btn');
+    if (seasonName === 'Spring') {
+        continueBtn.textContent = 'Continue to Summer Production ☀️';
+        continueBtn.onclick = () => socket.emit('continue_to_summer');
+    } else {
+        continueBtn.textContent = 'Continue to Award Season 🏆';
+        continueBtn.onclick = () => socket.emit('start_awards');
+    }
+    
     const myFilmsDiv = document.getElementById('my-films');
     const myFilms = playerData.films || [];
     
@@ -420,7 +463,6 @@ function updateReleasesView(gameData, playerData) {
         });
     }
     
-    // Show all films from all players
     const allFilmsDiv = document.getElementById('all-films');
     allFilmsDiv.innerHTML = '';
     
@@ -436,7 +478,6 @@ function updateReleasesView(gameData, playerData) {
         }
     }
     
-    // Sort by box office
     allFilms.sort((a, b) => b.box_office - a.box_office);
     
     allFilms.forEach((film, index) => {
@@ -452,11 +493,92 @@ function updateReleasesView(gameData, playerData) {
     });
 }
 
-function continueGame() {
-    alert('Next phase not yet implemented!');
+function continueToSummer() {
+    socket.emit('continue_to_summer');
 }
 
-// Allow Enter key to submit
+function continueToAwards() {
+    socket.emit('start_awards');
+}
+
+function updateAwardsVotingView(gameData, playerData) {
+    const currentCat = gameData.awards.current_category;
+    const category = gameData.awards.categories[currentCat];
+    
+    document.getElementById('awardCategory').textContent = category.name;
+    
+    const nomineesArea = document.getElementById('nominees-area');
+    nomineesArea.innerHTML = '';
+    
+    const myStudio = playerData.name;
+    const hasVoted = category.votes[socket.id] !== undefined;
+    
+    category.nominees.forEach((film, index) => {
+        const isMyFilm = film.studio === myStudio;
+        const isSelected = category.votes[socket.id] === index;
+        
+        nomineesArea.innerHTML += `
+            <div class="info-box" style="margin: 10px 0; ${isSelected ? 'border: 2px solid #FFD700;' : ''} ${isMyFilm ? 'opacity: 0.5;' : ''}">
+                <h3 style="color: #FFD700;">${film.title}</h3>
+                <p><strong>Studio:</strong> ${film.studio} ${isMyFilm ? '(YOUR FILM)' : ''}</p>
+                <p><strong>Prestige:</strong> ${film.prestige}</p>
+                <p style="font-style: italic;">"${film.teaser}"</p>
+                <button onclick="voteForNominee(${index})" ${hasVoted || isMyFilm ? 'disabled' : ''}>
+                    ${isSelected ? 'Voted ✓' : isMyFilm ? 'Cannot Vote' : 'Vote for This Film'}
+                </button>
+            </div>
+        `;
+    });
+    
+    const statusDiv = document.getElementById('vote-status');
+    if (hasVoted) {
+        const votedFilm = category.nominees[category.votes[socket.id]];
+        statusDiv.innerHTML = `<p style="color: #FFD700; font-size: 18px;">✓ You voted for: <strong>${votedFilm.title}</strong></p><p>Waiting for other players...</p>`;
+    } else {
+        statusDiv.innerHTML = '';
+    }
+}
+
+function voteForNominee(index) {
+    socket.emit('vote_for_nominee', {nominee_index: index});
+}
+
+function updateAwardsResultsView(gameData, playerData) {
+    const currentCat = gameData.awards.current_category;
+    const category = gameData.awards.categories[currentCat];
+    const winner = category.winner;
+    
+    const winnerDiv = document.getElementById('winner-announcement');
+    winnerDiv.innerHTML = `
+        <div style="text-align: center; padding: 30px;">
+            <h1 style="color: #FFD700; font-size: 64px; margin: 0;">🏆</h1>
+            <h2 style="color: #FFD700; margin: 10px 0;">${category.name}</h2>
+            <h1 style="color: #e50914; margin: 20px 0; font-size: 32px;">${winner.title}</h1>
+            <p style="font-size: 20px;"><strong>${winner.studio}</strong></p>
+            <p style="font-size: 16px; color: #aaa; font-style: italic;">"${winner.teaser}"</p>
+            <p style="font-size: 18px; margin-top: 20px; color: #4CAF50;">+${category.points_value} points!</p>
+        </div>
+    `;
+    
+    const standingsDiv = document.getElementById('final-standings');
+    standingsDiv.innerHTML = '<h2>Final Standings:</h2>';
+    
+    const playerArray = Object.entries(gameData.players).map(([sid, p]) => p);
+    playerArray.sort((a, b) => b.score - a.score);
+    
+    playerArray.forEach((player, index) => {
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+        const isMe = player.name === playerData.name;
+        
+        standingsDiv.innerHTML += `
+            <div class="info-box" style="margin: 10px 0; ${isMe ? 'border: 2px solid #e50914;' : ''}">
+                <p style="font-size: 20px; margin: 0;">${medal} <strong>${player.name}</strong></p>
+                <p style="margin: 5px 0;">${player.score} points | ${player.films ? player.films.length : 0} films</p>
+            </div>
+        `;
+    });
+}
+
 document.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         if (document.getElementById('join-screen').classList.contains('active')) {

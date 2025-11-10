@@ -42,6 +42,7 @@ class GameState:
         self.current_turn_cards = []
         self.player_selections = {}
         self.bidding_war = None
+        self.no_name_talent = {}
     
     def to_dict(self):
         """Convert state to dictionary for broadcasting"""
@@ -54,7 +55,8 @@ class GameState:
             'turn': self.turn,
             'current_turn_cards': self.current_turn_cards,
             'player_selections': self.player_selections,
-            'bidding_war': self.bidding_war
+            'bidding_war': self.bidding_war,
+            'no_name_talent': self.no_name_talent
         }
 
 # Utility functions
@@ -286,8 +288,8 @@ class AwardCategory:
             reverse=True
         )
         
-        # Return top N
-        return sorted_films[:self.nominees_count]
+        # Return top N, or all films if there aren't enough
+        return sorted_films[:min(self.nominees_count, len(sorted_films))]
     
     def calculate_winner(self, votes, nominees):
         """
@@ -362,6 +364,57 @@ def get_all_films_from_players(players):
                 })
     return all_films
 
+def generate_no_name_talent():
+    """
+    Generate "No Name" talent that players can use to fill gaps in their films.
+    These are budget indie talent with low heat but decent prestige.
+    Returns a dict with one of each role type.
+    """
+    import random
+    
+    no_name_roles = {
+        'producer': {
+            'name': 'No Name Producer',
+            'role': 'producer',
+            'heat': 0,
+            'heat_bucket': 'Unknown',
+            'prestige': 50,
+            'prestige_bucket': 'Artist',
+            'salary': 1,
+            'genre': random.choice(GENRES)
+        },
+        'screenwriter': {
+            'name': 'No Name Screenwriter',
+            'role': 'screenwriter',
+            'heat': 0,
+            'heat_bucket': 'Unknown',
+            'prestige': 50,
+            'prestige_bucket': 'Artist',
+            'salary': 1,
+            'audience': random.choice(AUDIENCES)
+        },
+        'director': {
+            'name': 'No Name Director',
+            'role': 'director',
+            'heat': 0,
+            'heat_bucket': 'Unknown',
+            'prestige': 50,
+            'prestige_bucket': 'Artist',
+            'salary': 1
+        },
+        'star': {
+            'name': 'No Name Star',
+            'role': 'star',
+            'heat': 0,
+            'heat_bucket': 'Unknown',
+            'prestige': 50,
+            'prestige_bucket': 'Artist',
+            'salary': 1
+        }
+    }
+    
+    return no_name_roles
+
 def setup_awards(players, active_categories=['best_picture']):
     """
     Set up award season with specified categories.
@@ -371,9 +424,13 @@ def setup_awards(players, active_categories=['best_picture']):
         active_categories: List of category keys to activate this season
     
     Returns:
-        Dictionary with award setup info
+        Dictionary with award setup info, or None if not enough films
     """
     all_films = get_all_films_from_players(players)
+    
+    # Need at least 3 films for awards to make sense
+    if len(all_films) < 3:
+        return None
     
     awards_data = {
         'categories': {},
