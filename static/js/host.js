@@ -98,6 +98,73 @@ function updateDisplay(state) {
             contentDiv.innerHTML += `<p>${selected} ${player.name}${selectionInfo}</p>`;
         }
         contentDiv.innerHTML += `</div><p>${numSelections}/${numPlayers} players have selected</p>`;
+    } else if (state.phase === 'phase1_bidding' || state.phase === 'phase1_bidding_results') {
+        const bw = state.bidding_war;
+        const isResults = state.phase === 'phase1_bidding_results';
+        
+        detailsDiv.innerHTML = `<p>💥 Winter BIDDING WAR - Turn ${state.turn} of 5</p>`;
+        
+        if (bw && bw.card_data) {
+            const card = bw.card_data;
+            contentDiv.innerHTML = `
+                <div style="background: #8B0000; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <h2 style="color: #FFD700; text-align: center; margin: 0;">💥 BIDDING WAR 💥</h2>
+                </div>
+                
+                <div class="talent-card" style="border: 3px solid #FFD700; background: #2a2a2a;">
+                    <h2 style="color: #FFD700; margin-top: 0;">CONTESTED ROLE:</h2>
+                    <h3>${card.name}</h3>
+                    <p><strong>Role:</strong> ${card.role.toUpperCase()}</p>
+                    <p><strong>Heat:</strong> ${card.heat_bucket} | <strong>Prestige:</strong> ${card.prestige_bucket}</p>
+                    <p><strong>Base Salary:</strong> $${card.salary}M</p>
+                    ${card.genre ? `<p><strong>Genre:</strong> ${card.genre}</p>` : ''}
+                    ${card.audience ? `<p><strong>Audience:</strong> ${card.audience}</p>` : ''}
+                </div>
+                
+                <h3 style="margin-top: 30px;">Participants:</h3>
+                <div class="submissions">
+            `;
+            
+            bw.participants.forEach(sid => {
+                const player = state.players[sid];
+                const hasBid = bw.bids[sid] !== undefined;
+                const status = hasBid ? '✓ Bid Submitted' : '⏳ Bidding...';
+                
+                contentDiv.innerHTML += `
+                    <div class="player-card" style="display: inline-block; margin: 10px;">
+                        <h3>${player.name}</h3>
+                        <p>💰 Budget: $${player.money}M</p>
+                        <p>${status}</p>
+                    </div>
+                `;
+            });
+            
+            contentDiv.innerHTML += '</div>';
+            
+            const numBids = Object.keys(bw.bids).length;
+            const numParticipants = bw.participants.length;
+            contentDiv.innerHTML += `<p style="text-align: center; font-size: 18px; margin-top: 20px;">
+                ${numBids} of ${numParticipants} players have bid
+            </p>`;
+            
+            if (isResults) {
+                contentDiv.innerHTML += `
+                    <div style="background: #1a1a1a; padding: 20px; margin: 20px 0; border-radius: 10px;">
+                        <h2 style="color: #FFD700; text-align: center;">BIDDING RESULTS</h2>
+                `;
+                
+                // Show all bids
+                bw.participants.forEach(sid => {
+                    const player = state.players[sid];
+                    const bid = bw.bids[sid] || 0;
+                    contentDiv.innerHTML += `<p style="font-size: 18px;"><strong>${player.name}:</strong> $${bid}M</p>`;
+                });
+                
+                contentDiv.innerHTML += '</div>';
+            }
+        } else {
+            contentDiv.innerHTML = '<p>Bidding war state not properly initialized...</p>';
+        }
     } else if (state.phase === 'phase1_packaging') {
         detailsDiv.innerHTML = '<p>Spring Packaging - Players assembling their films...</p>';
         contentDiv.innerHTML = '<h3>Player Progress:</h3><div class="submissions">';
@@ -202,6 +269,73 @@ function updateDisplay(state) {
             contentDiv.innerHTML += `<p>${selected} ${player.name}${selectionInfo}</p>`;
         }
         contentDiv.innerHTML += `</div><p>${numSelections2}/${numPlayers2} players have selected</p>`;
+    } else if (state.phase === 'phase2_bidding' || state.phase === 'phase2_bidding_results') {
+        const bw = state.bidding_war;
+        const isResults = state.phase === 'phase2_bidding_results';
+        
+        detailsDiv.innerHTML = `<p>💥 Summer BIDDING WAR - Turn ${state.turn} of 5</p>`;
+        
+        if (bw && bw.card_data) {
+            const card = bw.card_data;
+            contentDiv.innerHTML = `
+                <div style="background: #8B0000; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <h2 style="color: #FFD700; text-align: center; margin: 0;">💥 BIDDING WAR 💥</h2>
+                </div>
+                
+                <div class="talent-card" style="border: 3px solid #FFD700; background: #2a2a2a;">
+                    <h2 style="color: #FFD700; margin-top: 0;">CONTESTED ROLE:</h2>
+                    <h3>${card.name}</h3>
+                    <p><strong>Role:</strong> ${card.role.toUpperCase()}</p>
+                    <p><strong>Heat:</strong> ${card.heat_bucket} | <strong>Prestige:</strong> ${card.prestige_bucket}</p>
+                    <p><strong>Base Salary:</strong> $${card.salary}M</p>
+                    ${card.genre ? `<p><strong>Genre:</strong> ${card.genre}</p>` : ''}
+                    ${card.audience ? `<p><strong>Audience:</strong> ${card.audience}</p>` : ''}
+                </div>
+                
+                <h3 style="margin-top: 30px;">Participants:</h3>
+                <div class="submissions">
+            `;
+            
+            bw.participants.forEach(sid => {
+                const player = state.players[sid];
+                const hasBid = bw.bids[sid] !== undefined;
+                const status = hasBid ? '✓ Bid Submitted' : '⏳ Bidding...';
+                
+                contentDiv.innerHTML += `
+                    <div class="player-card" style="display: inline-block; margin: 10px;">
+                        <h3>${player.name}</h3>
+                        <p>💰 Budget: $${player.money}M</p>
+                        <p>${status}</p>
+                    </div>
+                `;
+            });
+            
+            contentDiv.innerHTML += '</div>';
+            
+            const numBids = Object.keys(bw.bids).length;
+            const numParticipants = bw.participants.length;
+            contentDiv.innerHTML += `<p style="text-align: center; font-size: 18px; margin-top: 20px;">
+                ${numBids} of ${numParticipants} players have bid
+            </p>`;
+            
+            if (isResults) {
+                contentDiv.innerHTML += `
+                    <div style="background: #1a1a1a; padding: 20px; margin: 20px 0; border-radius: 10px;">
+                        <h2 style="color: #FFD700; text-align: center;">BIDDING RESULTS</h2>
+                `;
+                
+                // Show all bids
+                bw.participants.forEach(sid => {
+                    const player = state.players[sid];
+                    const bid = bw.bids[sid] || 0;
+                    contentDiv.innerHTML += `<p style="font-size: 18px;"><strong>${player.name}:</strong> $${bid}M</p>`;
+                });
+                
+                contentDiv.innerHTML += '</div>';
+            }
+        } else {
+            contentDiv.innerHTML = '<p>Bidding war state not properly initialized...</p>';
+        }
     } else if (state.phase === 'phase2_packaging') {
         detailsDiv.innerHTML = '<p>🎄 Holiday Packaging - Players assembling their films...</p>';
         contentDiv.innerHTML = '<h3>Player Progress:</h3><div class="submissions">';

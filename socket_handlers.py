@@ -101,7 +101,16 @@ def register_handlers(socketio, game_state):
     def start_new_turn():
         """Generate cards for the current turn"""
         game_state.player_selections = {}
-        game_state.bidding_war = None
+        
+        # Reset bidding war state
+        game_state.bidding_war = {
+            'active': False,
+            'card_index': None,
+            'card_data': {},
+            'participants': [],
+            'bids': {},
+            'conflicts_queue': []
+        }
         
         cards = game_logic.generate_turn_cards(game_state)
         game_state.current_turn_cards = cards
@@ -113,6 +122,11 @@ def register_handlers(socketio, game_state):
     
     @socketio.on('select_card')
     def handle_select_card(data):
+        # Prevent re-selection during same turn
+        if request.sid in game_state.player_selections:
+            emit('selection_error', {'message': 'You have already made your selection for this turn!'})
+            return
+        
         selection = data['index']
         player = game_state.players[request.sid]
         player_name = player['name']
@@ -165,23 +179,204 @@ def register_handlers(socketio, game_state):
                     selection_groups[selection] = []
                 selection_groups[selection].append(sid)
         
-        # Check for bidding wars
-        bidding_wars = {idx: players for idx, players in selection_groups.items() if len(players) > 1}
+        # Separate contested cards from uncontested ones
+        contested_cards = {}    # {card_index: [sids]}
+        uncontested_cards = {}  # {card_index: [sid]}
         
-        if bidding_wars:
-            # TODO: Implement bidding war
-            card_index = list(bidding_wars.keys())[0]
-            print(f"\n💥 BIDDING WAR for card {card_index} - NOT YET IMPLEMENTED")
-            # For now, nobody gets it
-            advance_turn()
+        for card_index, player_list in selection_groups.items():
+            if len(player_list) > 1:
+                contested_cards[card_index] = player_list
+            else:
+                uncontested_cards[card_index] = player_list
+        
+        # Check if we have any bidding wars
+        if contested_cards:
+            # Build the conflicts queue
+            game_state.bidding_war['conflicts_queue'] = [
+                (card_idx, players) for card_idx, players in contested_cards.items()
+            ]
+            
+            print(f"\n💥 {len(contested_cards)} BIDDING WAR(S) DETECTED!")
+            for card_idx, players in contested_cards.items():
+                card = game_state.current_turn_cards[card_idx]
+                player_names = [game_state.players[sid]['name'] for sid in players]
+                print(f"  Card {card_idx} ({card['name']}): {', '.join(player_names)}")
+            
+            # Start processing the first conflict
+            start_next_bidding_war(uncontested_cards)
         else:
-            # Award cards directly
-            print("\n✓ No conflicts, awarding cards...")
-            for card_index, player_list in selection_groups.items():
-                if len(player_list) == 1:
-                    award_card_to_player(player_list[0], card_index)
+            # No conflicts - award all cards directly
+            print("\nNo conflicts, awarding cards...")
+            for card_index, player_list in uncontested_cards.items():
+                award_card_to_player(player_list[0], card_index)
             
             advance_turn()
+    
+    # ============================================================================
+    # BIDDING WAR SYSTEM
+    # ============================================================================
+    
+    def start_next_bidding_war(uncontested_cards):
+        """
+        Start the next bidding war from the conflicts queue.
+        If queue is empty, award uncontested cards and advance turn.
+        
+        Args:
+            uncontested_cards: Dict of {card_index: [sid]} for cards with single bidders
+        """
+        if not game_state.bidding_war['conflicts_queue']:
+            # No more conflicts - award uncontested cards and move on
+            print("\n✓ All bidding wars resolved!")
+            for card_index, player_list in uncontested_cards.items():
+                award_card_to_player(player_list[0], card_index)
+            advance_turn()
+            return
+        
+        # Get the next conflict from the queue
+        card_index, participants = game_state.bidding_war['conflicts_queue'].pop(0)
+        card_data = game_state.current_turn_cards[card_index].copy()
+        
+        # Set up the bidding war state
+        game_state.bidding_war['active'] = True
+        game_state.bidding_war['card_index'] = card_index
+        game_state.bidding_war['card_data'] = card_data
+        game_state.bidding_war['participants'] = participants
+        game_state.bidding_war['bids'] = {}  # Reset bids
+        
+        # Determine which phase we're in for UI
+        if game_state.phase == 'phase1_production':
+            game_state.phase = 'phase1_bidding'
+        elif game_state.phase == 'phase2_production':
+            game_state.phase = 'phase2_bidding'
+        
+        player_names = [game_state.players[sid]['name'] for sid in participants]
+        print(f"\n🎬 STARTING BIDDING WAR for {card_data['name']}")
+        print(f"   Participants: {', '.join(player_names)}")
+        
+        # Store uncontested_cards for later use
+        game_state.bidding_war['uncontested_cards'] = uncontested_cards
+        
+        broadcast_game_state()
+    
+    def resolve_bidding_war():
+        """
+        Determine the winner of a bidding war and award the card.
+        Called after all participants have submitted bids.
+        """
+        bids = game_state.bidding_war['bids']
+        participants = game_state.bidding_war['participants']
+        card_data = game_state.bidding_war['card_data']
+        card_index = game_state.bidding_war['card_index']
+        
+        print(f"\n🎬 RESOLVING BIDDING WAR for {card_data['name']}")
+        
+        # Show all bids
+        for sid in participants:
+            player_name = game_state.players[sid]['name']
+            bid = bids.get(sid, 0)
+            print(f"   {player_name}: ${bid}M")
+        
+        # Find the highest bid
+        max_bid = max(bids.values())
+        winners = [sid for sid, bid in bids.items() if bid == max_bid]
+        
+        if len(winners) > 1:
+            # TIE - Nobody gets the card!
+            print(f"\n💔 TIE at ${max_bid}M!")
+            print(f"   {card_data['name']} is disgusted by studio politicking!")
+            print(f"   Nobody gets the role, bids refunded.")
+        else:
+            # We have a winner!
+            winner_sid = winners[0]
+            winner_name = game_state.players[winner_sid]['name']
+            print(f"\n🏆 WINNER: {winner_name} with bid of ${max_bid}M!")
+            
+            # Award the card with the extra bid
+            award_card_to_player(winner_sid, card_index, extra_bid=max_bid)
+        
+        # Move to results phase
+        if game_state.phase == 'phase1_bidding':
+            game_state.phase = 'phase1_bidding_results'
+        elif game_state.phase == 'phase2_bidding':
+            game_state.phase = 'phase2_bidding_results'
+        
+        broadcast_game_state()
+    
+    def continue_after_bidding_results():
+        """
+        Called after showing bidding results.
+        Either starts the next bidding war or continues the turn.
+        """
+        uncontested_cards = game_state.bidding_war.get('uncontested_cards', {})
+        
+        # Reset active bidding war
+        game_state.bidding_war['active'] = False
+        
+        # Return to production phase
+        if 'phase1' in game_state.phase:
+            game_state.phase = 'phase1_production'
+        elif 'phase2' in game_state.phase:
+            game_state.phase = 'phase2_production'
+        
+        # Check if there are more conflicts
+        start_next_bidding_war(uncontested_cards)
+    
+    # ============================================================================
+    # BIDDING WAR - BID SUBMISSION
+    # ============================================================================
+    
+    @socketio.on('submit_bid')
+    def handle_submit_bid(data):
+        """
+        Handle a player's bid submission during a bidding war.
+        Validates affordability and automatically resolves when all bids are in.
+        """
+        bid_amount = data.get('bid_amount', 0)
+        
+        # Validation checks
+        if not game_state.bidding_war.get('active'):
+            emit('bid_error', {'message': 'No active bidding war!'})
+            return
+        
+        if request.sid not in game_state.bidding_war['participants']:
+            emit('bid_error', {'message': 'You are not a participant in this bidding war!'})
+            return
+        
+        if request.sid in game_state.bidding_war['bids']:
+            emit('bid_error', {'message': 'You have already submitted your bid!'})
+            return
+        
+        # Validate bid amount
+        if bid_amount < 0:
+            emit('bid_error', {'message': 'Bid cannot be negative!'})
+            return
+        
+        # Check affordability: player must be able to pay base salary + bid
+        player = game_state.players[request.sid]
+        card_data = game_state.bidding_war['card_data']
+        base_salary = card_data['salary']
+        total_cost = base_salary + bid_amount
+        
+        if player['money'] < total_cost:
+            emit('bid_error', {'message': f'Cannot afford! Total cost: ${total_cost}M, Your budget: ${player["money"]}M'})
+            return
+        
+        # Bid is valid - record it
+        game_state.bidding_war['bids'][request.sid] = bid_amount
+        player_name = player['name']
+        
+        print(f"  💰 {player_name} bid ${bid_amount}M (Total: ${total_cost}M)")
+        
+        # Check if all participants have bid
+        num_bids = len(game_state.bidding_war['bids'])
+        num_participants = len(game_state.bidding_war['participants'])
+        
+        if num_bids == num_participants:
+            print(f"\n✓ All {num_participants} participants have submitted bids!")
+            resolve_bidding_war()
+        else:
+            print(f"  Waiting for {num_participants - num_bids} more bid(s)...")
+            broadcast_game_state()
     
     def award_card_to_player(player_sid, card_index, extra_bid=0):
         """Give a card to a player and deduct cost"""
@@ -190,8 +385,8 @@ def register_handlers(socketio, game_state):
         
         total_cost = card['salary'] + extra_bid
         
-        print(f"  → Awarding {card['name']} to {player['name']} for ${total_cost}M")
-        print(f"     Money: ${player['money']}M → ${player['money'] - total_cost}M")
+        print(f"  â†’ Awarding {card['name']} to {player['name']} for ${total_cost}M")
+        print(f"     Money: ${player['money']}M â†’ ${player['money'] - total_cost}M")
         
         player['money'] -= total_cost
         player['roles'].append(card.copy())
@@ -230,6 +425,14 @@ def register_handlers(socketio, game_state):
                 print(f"  {player['name']} has {role_count} roles + no-name talent available")
         
         broadcast_game_state()
+    
+    @socketio.on('continue_after_bidding')
+    def handle_continue_after_bidding():
+        """
+        Socket handler for when players/host continue after viewing bidding results.
+        Proceeds to next conflict or continues turn.
+        """
+        continue_after_bidding_results()
     
     @socketio.on('request_update')
     def handle_request_update():
@@ -412,7 +615,7 @@ def register_handlers(socketio, game_state):
             for sid, player in game_state.players.items():
                 if player['name'] == winner_studio:
                     player['score'] += category.points_value
-                    print(f"\n🏆 {category.name} WINNER: {winner['title']} ({winner_studio})")
+                    print(f"\nðŸ† {category.name} WINNER: {winner['title']} ({winner_studio})")
                     print(f"   +{category.points_value} points awarded!")
                     break
         

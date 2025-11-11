@@ -41,7 +41,14 @@ class GameState:
         self.turn = 0
         self.current_turn_cards = []
         self.player_selections = {}
-        self.bidding_war = None
+        self.bidding_war = {
+            'active': False,
+            'card_index': None,           # Which card is being fought over
+            'card_data': {},              # Copy of the card itself
+            'participants': [],           # List of player SIDs competing
+            'bids': {},                   # {sid: bid_amount}
+            'conflicts_queue': []         # List of (card_index, [sids]) to resolve
+        }
         self.no_name_talent = {}
     
     def to_dict(self):
