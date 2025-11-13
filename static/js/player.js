@@ -144,6 +144,25 @@ socket.on('game_update', (data) => {
         updateRoleInventory(myData.roles || [], 'roleInventory');
         renderProductionCards(data, myData);
         
+    } else if (data.phase === 'phase1_bidding' || data.phase === 'phase2_bidding') {
+        console.log('🔥 BIDDING PHASE DETECTED!', data.phase);
+        console.log('Bidding war data:', data.bidding_war);
+        showScreen('bidding-screen');
+        try {
+            updateBiddingView(data, myData);
+        } catch (error) {
+            console.error('❌ Error in updateBiddingView:', error);
+        }
+        
+    } else if (data.phase === 'phase1_bidding_results' || data.phase === 'phase2_bidding_results') {
+        console.log('📊 BIDDING RESULTS PHASE!', data.phase);
+        showScreen('bidding-results-screen');
+        try {
+            updateBiddingResultsView(data, myData);
+        } catch (error) {
+            console.error('❌ Error in updateBiddingResultsView:', error);
+        }
+    
     } else if (data.phase === 'phase1_packaging') {
         showScreen('packaging-screen');
         console.log('Spring Packaging - my roles:', myData.roles);
@@ -577,6 +596,256 @@ function updateAwardsResultsView(gameData, playerData) {
             </div>
         `;
     });
+}
+
+// ============================================================================
+// BIDDING WAR FUNCTIONS
+// ============================================================================
+
+function updateBiddingView(gameData, playerData) {
+    /**
+     * Updates the bidding screen with the contested card info and bidding controls
+     */
+
+    console.log('🎯 updateBiddingView called');
+    console.log('  - gameData.bidding_war:', gameData.bidding_war);
+    console.log('  - playerData:', playerData);
+
+    const biddingWar = gameData.bidding_war;
+    
+    if (!biddingWar || !biddingWar.active) {
+        console.error('❌ No active bidding war!');
+        return;
+    }
+    
+     console.log('✅ Active bidding war confirmed');
+
+    const cardData = biddingWar.card_data;
+    const isParticipant = biddingWar.participants.includes(socket.id);
+    const hasAlreadyBid = biddingWar.bids && biddingWar.bids[socket.id] !== undefined;
+    
+    console.log('  - isParticipant:', isParticipant);
+    console.log('  - hasAlreadyBid:', hasAlreadyBid);
+    console.log('  - cardData:', cardData);
+
+    // Display the contested card
+    const contestedCard = document.getElementById('contested-card');
+    contestedCard.innerHTML = `
+        <h2 style="color: #e50914; margin: 10px 0; font-size: 28px;">${cardData.name}</h2>
+        <p style="font-size: 18px; margin: 5px 0;"><strong>${cardData.role.toUpperCase()}</strong></p>
+        <p style="margin: 5px 0;">Heat: ${cardData.heat_bucket} | Prestige: ${cardData.prestige_bucket}</p>
+        <p style="font-size: 20px; margin: 10px 0; color: #4CAF50;">
+            <strong>Base Salary: $${cardData.salary}M</strong>
+        </p>
+        ${cardData.genre ? `<p>Genre: ${cardData.genre}</p>` : ''}
+        ${cardData.audience ? `<p>Audience: ${cardData.audience}</p>` : ''}
+    `;
+    
+    // Set base salary
+    document.getElementById('baseSalary').textContent = cardData.salary;
+    
+    if (!isParticipant) {
+        // Not participating in this bidding war
+        document.getElementById('bid-status').innerHTML = `
+            <div class="info-box" style="background: #2a2a2a; text-align: center;">
+                <p style="font-size: 18px; color: #aaa;">
+                    You're not involved in this bidding war.
+                </p>
+                <p style="margin-top: 10px;">Waiting for other players to bid...</p>
+            </div>
+        `;
+        document.getElementById('submit-bid-btn').disabled = true;
+        document.getElementById('submit-bid-btn').style.display = 'none';
+        
+        // Hide bid controls
+        document.querySelector('[onclick="decreaseBid()"]').style.display = 'none';
+        document.querySelector('[onclick="increaseBid()"]').style.display = 'none';
+        
+    } else if (hasAlreadyBid) {
+        // Already submitted bid
+        const myBid = biddingWar.bids[socket.id];
+        document.getElementById('bid-status').innerHTML = `
+            <div class="info-box" style="background: #1a1a1a; border: 2px solid #4CAF50; text-align: center;">
+                <p style="font-size: 20px; color: #4CAF50;">✓ Bid Submitted!</p>
+                <p style="font-size: 24px; margin: 10px 0;">$${myBid}M extra</p>
+                <p style="color: #aaa;">Waiting for other players...</p>
+            </div>
+        `;
+        document.getElementById('submit-bid-btn').disabled = true;
+        document.getElementById('submit-bid-btn').style.display = 'none';
+        
+        // Hide bid controls
+        document.querySelector('[onclick="decreaseBid()"]').style.display = 'none';
+        document.querySelector('[onclick="increaseBid()"]').style.display = 'none';
+        document.getElementById('currentBid').parentElement.parentElement.style.display = 'none';
+        
+    } else {
+        // Can bid - initialize
+        currentBidAmount = 0;
+        updateBidDisplay(cardData.salary, playerData.money);
+        document.getElementById('submit-bid-btn').disabled = false;
+        document.getElementById('submit-bid-btn').style.display = 'block';
+        document.getElementById('bid-status').innerHTML = '';
+        
+        // Show bid controls
+        document.querySelector('[onclick="decreaseBid()"]').style.display = 'inline-block';
+        document.querySelector('[onclick="increaseBid()"]').style.display = 'inline-block';
+        document.getElementById('currentBid').parentElement.parentElement.style.display = 'flex';
+    }
+}
+
+function updateBidDisplay(baseSalary, playerMoney) {
+    /**
+     * Updates the bid display elements (current bid, total cost, affordability)
+     */
+    document.getElementById('currentBid').textContent = currentBidAmount;
+    
+    const totalCost = baseSalary + currentBidAmount;
+    document.getElementById('totalCost').textContent = totalCost;
+    
+    // Check affordability
+    const canAfford = playerMoney >= totalCost;
+    const warning = document.getElementById('affordabilityWarning');
+    const submitBtn = document.getElementById('submit-bid-btn');
+    
+    if (!canAfford) {
+        warning.style.display = 'block';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.5';
+    } else {
+        warning.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+    }
+}
+
+function increaseBid() {
+    /**
+     * Increase bid by $1M
+     */
+    currentBidAmount++;
+    const baseSalary = parseInt(document.getElementById('baseSalary').textContent);
+    const playerMoney = parseInt(document.getElementById('biddingMoney').textContent);
+    updateBidDisplay(baseSalary, playerMoney);
+}
+
+function decreaseBid() {
+    /**
+     * Decrease bid by $1M (minimum $0M)
+     */
+    if (currentBidAmount > 0) {
+        currentBidAmount--;
+        const baseSalary = parseInt(document.getElementById('baseSalary').textContent);
+        const playerMoney = parseInt(document.getElementById('biddingMoney').textContent);
+        updateBidDisplay(baseSalary, playerMoney);
+    }
+}
+
+function submitBid() {
+    /**
+     * Submit the current bid to the server
+     */
+    console.log(`Submitting bid: $${currentBidAmount}M`);
+    socket.emit('submit_bid', {bid_amount: currentBidAmount});
+}
+
+function updateBiddingResultsView(gameData, playerData) {
+    /**
+     * Updates the results screen showing who won the bidding war
+     */
+    const biddingWar = gameData.bidding_war;
+    
+    if (!biddingWar) {
+        return;
+    }
+    
+    const cardData = biddingWar.card_data;
+    const bids = biddingWar.bids || {};
+    const participants = biddingWar.participants || [];
+    
+    // Display the contested role name
+    document.getElementById('contestedRoleName').textContent = cardData.name;
+    
+    // Display all bids
+    const allBidsDiv = document.getElementById('all-bids');
+    allBidsDiv.innerHTML = '<h3 style="margin-top: 0;">All Bids:</h3>';
+    
+    // Sort bids by amount (highest first)
+    const sortedBids = participants
+        .map(sid => ({
+            sid: sid,
+            name: gameData.players[sid].name,
+            bid: bids[sid] || 0
+        }))
+        .sort((a, b) => b.bid - a.bid);
+    
+    sortedBids.forEach((bidder, index) => {
+        const isMe = bidder.sid === socket.id;
+        const isHighest = index === 0;
+        const borderColor = isMe ? '#e50914' : (isHighest ? '#4CAF50' : '#666');
+        
+        allBidsDiv.innerHTML += `
+            <div class="info-box" style="margin: 10px 0; border: 2px solid ${borderColor};">
+                <p style="font-size: 18px; margin: 0;">
+                    <strong>${bidder.name}</strong> ${isMe ? '(You)' : ''}
+                </p>
+                <p style="font-size: 24px; color: ${isHighest ? '#4CAF50' : '#fff'}; margin: 5px 0;">
+                    $${bidder.bid}M
+                </p>
+            </div>
+        `;
+    });
+    
+    // Determine winner
+    const maxBid = Math.max(...Object.values(bids));
+    const winners = participants.filter(sid => bids[sid] === maxBid);
+    
+    const winnerBox = document.getElementById('winner-announcement-box');
+    
+    if (winners.length > 1) {
+        // TIE - Nobody gets it!
+        winnerBox.innerHTML = `
+            <h1 style="font-size: 48px; margin: 20px 0;">💔</h1>
+            <h2 style="color: #ff9800; margin: 10px 0;">TIE!</h2>
+            <p style="font-size: 20px; color: #aaa; margin: 10px 0;">
+                Multiple studios bid $${maxBid}M
+            </p>
+            <p style="font-size: 18px; color: #aaa;">
+                ${cardData.name} is disgusted by studio politicking!
+            </p>
+            <p style="font-size: 16px; color: #888; margin-top: 15px;">
+                Nobody gets the role. All bids refunded.
+            </p>
+        `;
+    } else {
+        // We have a winner!
+        const winnerSid = winners[0];
+        const winnerName = gameData.players[winnerSid].name;
+        const isYou = winnerSid === socket.id;
+        
+        winnerBox.innerHTML = `
+            <h1 style="font-size: 64px; margin: 20px 0;">🏆</h1>
+            <h2 style="color: #4CAF50; margin: 10px 0;">WINNER!</h2>
+            <p style="font-size: 28px; color: ${isYou ? '#e50914' : '#fff'}; margin: 10px 0;">
+                <strong>${winnerName}</strong> ${isYou ? '(You!)' : ''}
+            </p>
+            <p style="font-size: 20px; color: #aaa; margin: 10px 0;">
+                Winning bid: <span style="color: #4CAF50;">$${maxBid}M</span>
+            </p>
+            <p style="font-size: 18px; color: #aaa;">
+                Total cost: $${cardData.salary + maxBid}M
+            </p>
+            ${isYou ? '<p style="font-size: 16px; color: #4CAF50; margin-top: 15px;">✓ ' + cardData.name + ' added to your roster!</p>' : ''}
+        `;
+    }
+}
+
+function continueAfterBidding() {
+    /**
+     * Signal to server that we're ready to continue after viewing results
+     */
+    console.log('Continuing after bidding war results');
+    socket.emit('continue_after_bidding');
 }
 
 document.addEventListener('keypress', (e) => {

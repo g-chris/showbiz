@@ -56,6 +56,82 @@
         <div id="cards-area"></div>
         <div id="selection-status"></div>
     </div>
+
+      <!-- Bidding War Screen -->
+    <div id="bidding-screen" class="screen">
+        <h1 style="color: #e50914; text-align: center;">💥 BIDDING WAR! 💥</h1>
+        
+        <div class="info-box">
+            <h2 id="biddingStudioName"></h2>
+            <p>💰 Budget: $<span id="biddingMoney">100</span>M</p>
+        </div>
+        
+        <div style="background: #2a2a2a; border: 3px solid #FFD700; padding: 20px; margin: 20px 0; border-radius: 5px;">
+            <h2 style="color: #FFD700; margin-top: 0; text-align: center;">CONTESTED ROLE</h2>
+            <div id="contested-card" style="text-align: center;">
+                <!-- Card details will be inserted here -->
+            </div>
+        </div>
+        
+        <div class="info-box" style="background: #1a1a1a;">
+            <h3 style="margin-top: 0;">Place Your Bid</h3>
+            <p style="color: #aaa; font-size: 14px;">Base Salary: $<span id="baseSalary">0</span>M</p>
+            
+            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin: 20px 0;">
+                <button onclick="decreaseBid()" style="width: 60px; height: 60px; font-size: 32px; background: #666;">-</button>
+                <div style="text-align: center;">
+                    <div style="font-size: 48px; font-weight: bold; color: #e50914; margin: 10px 0;">
+                        $<span id="currentBid">0</span>M
+                    </div>
+                    <div style="font-size: 14px; color: #aaa;">Extra Bid</div>
+                </div>
+                <button onclick="increaseBid()" style="width: 60px; height: 60px; font-size: 32px;">+</button>
+            </div>
+            
+            <div style="border-top: 1px solid #666; padding-top: 15px; margin-top: 15px;">
+                <p style="font-size: 18px; margin: 5px 0;">
+                    <strong>Total Cost:</strong> 
+                    <span style="color: #4CAF50; font-size: 24px;">$<span id="totalCost">0</span>M</span>
+                </p>
+                <p id="affordabilityWarning" style="color: #ff9800; display: none; margin: 10px 0;">
+                    ⚠️ Cannot afford this bid!
+                </p>
+            </div>
+        </div>
+        
+        <button onclick="submitBid()" id="submit-bid-btn" style="margin-top: 20px; font-size: 20px; padding: 15px;">
+            Submit Bid
+        </button>
+        
+        <div id="bid-status" style="margin-top: 20px;"></div>
+    </div>
+    
+    <!-- Bidding Results Screen -->
+    <div id="bidding-results-screen" class="screen">
+        <h1 style="text-align: center;">💥 Bidding War Results 💥</h1>
+        
+        <div class="info-box">
+            <h2 id="resultsStudioName"></h2>
+            <p>💰 Budget: $<span id="resultsMoney">100</span>M</p>
+        </div>
+        
+        <div style="background: #2a2a2a; border: 2px solid #FFD700; padding: 20px; margin: 20px 0; border-radius: 5px;">
+            <h2 style="color: #FFD700; margin-top: 0; text-align: center;">
+                <span id="contestedRoleName">Role Name</span>
+            </h2>
+            <div id="all-bids" style="margin: 20px 0;">
+                <!-- All bids will be displayed here -->
+            </div>
+        </div>
+        
+        <div id="winner-announcement-box" style="text-align: center; padding: 30px; margin: 20px 0;">
+            <!-- Winner announcement will be inserted here -->
+        </div>
+        
+        <button onclick="continueAfterBidding()" style="margin-top: 20px; font-size: 18px; padding: 15px;">
+            Continue
+        </button>
+    </div>
     
     <!-- Phase 1 Packaging Screen -->
     <div id="packaging-screen" class="screen">
