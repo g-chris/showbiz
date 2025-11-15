@@ -435,8 +435,8 @@ def setup_awards(players, active_categories=['best_picture']):
     """
     all_films = get_all_films_from_players(players)
     
-    # Need at least 3 films for awards to make sense
-    if len(all_films) < 3:
+    # Need at least 2 films for awards to make sense
+    if len(all_films) < 2:
         return None
     
     awards_data = {
