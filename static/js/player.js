@@ -4,6 +4,7 @@ const socket = io();
 let myName = '';
 let currentPackage = [];
 let greenlitFilms = [];
+let currentBidAmount = 0;
 
 // Default names for pre-filling
 const DEFAULT_NAMES = {
@@ -60,6 +61,8 @@ socket.on('game_update', (data) => {
     document.getElementById('p1Money').textContent = myData.money;
     document.getElementById('pkgMoney').textContent = myData.money;
     document.getElementById('relMoney').textContent = myData.money;
+    document.getElementById('biddingMoney').textContent = myData.money;  
+    document.getElementById('resultsMoney').textContent = myData.money;
     document.getElementById('relScore').textContent = myData.score;
     
     // Update greenlit films from server
@@ -628,6 +631,10 @@ function updateBiddingView(gameData, playerData) {
     console.log('  - hasAlreadyBid:', hasAlreadyBid);
     console.log('  - cardData:', cardData);
 
+     // Update budget display at top of screen
+    document.getElementById('biddingMoney').textContent = playerData.money;
+
+
     // Display the contested card
     const contestedCard = document.getElementById('contested-card');
     contestedCard.innerHTML = `
@@ -680,8 +687,15 @@ function updateBiddingView(gameData, playerData) {
         document.getElementById('currentBid').parentElement.parentElement.style.display = 'none';
         
     } else {
-        // Can bid - initialize
+        // Can bid - initialize ONLY if this is a new bidding war
+        // Check if we've already started bidding on this specific card
+        const currentCard = biddingWar.card_index;
+        if (window.lastBiddingCardIndex !== currentCard) {
+        // New bidding war - reset bid
         currentBidAmount = 0;
+        window.lastBiddingCardIndex = currentCard;
+        }
+
         updateBidDisplay(cardData.salary, playerData.money);
         document.getElementById('submit-bid-btn').disabled = false;
         document.getElementById('submit-bid-btn').style.display = 'block';
@@ -759,6 +773,9 @@ function updateBiddingResultsView(gameData, playerData) {
         return;
     }
     
+    // Update budget display
+    document.getElementById('resultsMoney').textContent = playerData.money;
+
     const cardData = biddingWar.card_data;
     const bids = biddingWar.bids || {};
     const participants = biddingWar.participants || [];

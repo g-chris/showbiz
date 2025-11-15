@@ -278,7 +278,7 @@ class AwardCategory:
     """Represents an award category with its rules"""
     
     def __init__(self, name, nominees_count=5, scoring_attribute='prestige', 
-                 can_vote_for_own=False, points_value=50):
+                 can_vote_for_own=False, points_value=1000):
         self.name = name
         self.nominees_count = nominees_count
         self.scoring_attribute = scoring_attribute
