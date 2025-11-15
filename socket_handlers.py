@@ -19,16 +19,50 @@ def register_handlers(socketio, game_state):
     @socketio.on('join_game')
     def handle_join(data):
         player_name = data['name']
-        game_state.players[request.sid] = {
-            'name': player_name,
-            'money': 100,
-            'score': 0,
-            'roles': [],
-            'films': []
-        }
-        print(f'{player_name} joined the game')
+    
+        # Check if a player with this name already exists (RECONNECTION)
+        existing_sid = None
+        for sid, player in game_state.players.items():
+            if player['name'] == player_name:
+                existing_sid = sid
+                break
+        
+        if existing_sid:
+            # RECONNECTION - transfer player data to new socket.id
+            print(f'🔄 {player_name} reconnecting (old: {existing_sid[:8]}, new: {request.sid[:8]})')
+            player_data = game_state.players[existing_sid]
+            
+            # Remove old socket.id entry
+            del game_state.players[existing_sid]
+            
+            # Add player with NEW socket.id but PRESERVE their data
+            game_state.players[request.sid] = player_data
+            
+            # Update naming progress if in Phase 0
+            if game_state.phase.startswith('phase0') and existing_sid in game_state.naming_progress.get('submissions', {}):
+                prog_data = game_state.naming_progress['submissions'][existing_sid]
+                del game_state.naming_progress['submissions'][existing_sid]
+                game_state.naming_progress['submissions'][request.sid] = prog_data
+            
+            print(f'  ✅ Restored: ${player_data["money"]}M, {player_data["score"]} pts, {len(player_data.get("roles", []))} roles, {len(player_data.get("films", []))} films')
+        else:
+            # NEW PLAYER
+            game_state.players[request.sid] = {
+                'name': player_name,
+                'money': 100,
+                'score': 0,
+                'roles': [],
+                'films': []
+            }
+            print(f'{player_name} joined the game')
+        
         emit('joined')
         broadcast_game_state()
+
+    @socketio.on('heartbeat')
+    def handle_heartbeat(data):
+        """Keep connection alive - mobile browsers kill idle connections"""
+        pass  # Just acknowledge - the connection staying alive is the point
     
     @socketio.on('start_phase0')
     def handle_start_phase0():
@@ -627,6 +661,9 @@ def register_handlers(socketio, game_state):
     def handle_disconnect():
         if request.sid in game_state.players:
             player_name = game_state.players[request.sid]['name']
-            del game_state.players[request.sid]
-            print(f'{player_name} left the game')
-            broadcast_game_state()
+            print(f'📱 {player_name} disconnected (socket: {request.sid[:8]})')
+            print(f'  💾 Player data preserved for reconnection')
+        
+        # DON'T delete the player - keep their data for reconnection
+        # When they reconnect, join_game will update their socket.id
+        # This prevents losing progress when mobile phones go to sleep

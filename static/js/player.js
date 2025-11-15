@@ -6,6 +6,61 @@ let currentPackage = [];
 let greenlitFilms = [];
 let currentBidAmount = 0;
 
+// Check for saved session on page load
+const savedPlayerName = sessionStorage.getItem('playerName');
+if (savedPlayerName) {
+    myName = savedPlayerName;
+    console.log('📱 Found saved session for:', myName);
+}
+
+// Configure Socket.IO reconnection
+socket.io.opts.reconnection = true;
+socket.io.opts.reconnectionAttempts = Infinity;  // Keep trying forever
+socket.io.opts.reconnectionDelay = 1000;         // Start with 1s
+socket.io.opts.reconnectionDelayMax = 5000;      // Max 5s between attempts
+socket.io.opts.timeout = 20000;                  // 20s timeout
+
+// Connection status function
+function updateConnectionStatus(status, message) {
+    // Updates the visual indicator
+}
+
+// Socket.IO reconnection handlers
+socket.on('connect', () => {
+    // Auto-rejoin if we have saved name
+    if (myName && myName !== '') {
+        socket.emit('join_game', {name: myName});
+    }
+});
+
+socket.on('disconnect', (reason) => {
+    updateConnectionStatus('disconnected', 'Connection lost...');
+});
+
+socket.on('reconnect', (attemptNumber) => {
+    updateConnectionStatus('connected');
+});
+
+socket.on('reconnect_attempt', (attemptNumber) => {
+    updateConnectionStatus('disconnected', `Reconnecting (${attemptNumber})...`);
+});
+
+// Page visibility detection
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !socket.connected) {
+        // Phone woke up but we're disconnected - reconnect!
+        socket.connect();
+    }
+});
+
+// Heartbeat every 30 seconds
+setInterval(() => {
+    if (socket.connected && myName) {
+        socket.emit('heartbeat', {name: myName});
+    }
+}, 30000);
+
+
 // Default names for pre-filling
 const DEFAULT_NAMES = {
     'screenwriter': [
@@ -28,16 +83,27 @@ const DEFAULT_NAMES = {
 function joinGame() {
     myName = document.getElementById('playerName').value.trim();
     if (myName) {
+        // Save to session storage
+        sessionStorage.setItem('playerName', myName);
         socket.emit('join_game', {name: myName});
     }
 }
 
 socket.on('joined', () => {
+    console.log('✅ Successfully joined game as:', myName);
+    
+    // Save to session storage
+    sessionStorage.setItem('playerName', myName);
+
     showScreen('lobby-screen');
     document.getElementById('studioName').textContent = myName;
     document.getElementById('studioNameP1').textContent = myName;
     document.getElementById('studioNamePkg').textContent = myName;
     document.getElementById('studioNameRel').textContent = myName;
+
+    // Update connection status
+    updateConnectionStatus('connected');
+
 });
 
 socket.on('selection_error', (data) => {

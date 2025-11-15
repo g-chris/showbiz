@@ -7,6 +7,22 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
+    <!-- Connection Status Indicator -->
+    <div id="connection-status" style="
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        padding: 8px 15px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: bold;
+        z-index: 9999;
+        display: none;
+    ">
+        <span id="status-icon">●</span>
+        <span id="status-text">Connected</span>
+    </div>
+    
     <!-- Join Screen -->
     <div id="join-screen" class="screen active">
         <h1>🎬 Join Game</h1>
