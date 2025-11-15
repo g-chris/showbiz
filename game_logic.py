@@ -50,6 +50,7 @@ class GameState:
             'conflicts_queue': []         # List of (card_index, [sids]) to resolve
         }
         self.no_name_talent = {}
+        self.awards = None
     
     def to_dict(self):
         """Convert state to dictionary for broadcasting"""
@@ -63,7 +64,8 @@ class GameState:
             'current_turn_cards': self.current_turn_cards,
             'player_selections': self.player_selections,
             'bidding_war': self.bidding_war,
-            'no_name_talent': self.no_name_talent
+            'no_name_talent': self.no_name_talent,
+            'awards': self.awards
         }
 
 # Utility functions
