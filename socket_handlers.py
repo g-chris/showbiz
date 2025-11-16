@@ -466,7 +466,23 @@ def register_handlers(socketio, game_state):
         Socket handler for when players/host continue after viewing bidding results.
         Proceeds to next conflict or continues turn.
         """
-        continue_after_bidding_results()
+        player = game_state.players[request.sid]
+        player['bidding_results_ready'] = True
+        
+        player_name = player['name']
+        ready_count = sum(1 for p in game_state.players.values() if p.get('bidding_results_ready', False))
+        total_count = len(game_state.players)
+        print(f"  {player_name} ready to continue ({ready_count}/{total_count})")
+        
+        # Check if all players ready
+        if all(p.get('bidding_results_ready', False) for p in game_state.players.values()):
+            # Reset ready flags
+            for p in game_state.players.values():
+                p['bidding_results_ready'] = False
+            
+            continue_after_bidding_results()
+        else:
+            broadcast_game_state()
     
     @socketio.on('request_update')
     def handle_request_update():
@@ -560,40 +576,69 @@ def register_handlers(socketio, game_state):
     
     @socketio.on('continue_to_summer')
     def handle_continue_to_summer():
-        """Start Phase 2: Summer Production"""
-        print("\n=== Starting Phase 2: Summer Production ===\n")
-        game_state.phase = 'phase2_production'
-        game_state.turn = 1
+        """Start Phase 2: Summer Production - wait for all players"""
+        player = game_state.players[request.sid]
+        player['spring_releases_ready'] = True
         
-        # Reset ready flags
-        for player in game_state.players.values():
-            player['spring_ready'] = False
-            player['holiday_ready'] = False
+        player_name = player['name']
+        ready_count = sum(1 for p in game_state.players.values() if p.get('spring_releases_ready', False))
+        total_count = len(game_state.players)
+        print(f"  {player_name} ready for Summer ({ready_count}/{total_count})")
         
-        start_new_turn()
-        broadcast_game_state()
+        # Check if all players ready
+        if all(p.get('spring_releases_ready', False) for p in game_state.players.values()):
+            print("\n=== Starting Phase 2: Summer Production ===\n")
+            game_state.phase = 'phase2_production'
+            game_state.turn = 1
+            
+            # Reset ready flags
+            for p in game_state.players.values():
+                p['spring_ready'] = False
+                p['holiday_ready'] = False
+                p['spring_releases_ready'] = False
+            
+            start_new_turn()
+            broadcast_game_state()
+        else:
+            broadcast_game_state()
     
     @socketio.on('start_awards')
     def handle_start_awards():
-        """Start Award Season"""
-        print("\n=== Starting Award Season ===\n")
+        """Start Award Season - wait for all players"""
+        player = game_state.players[request.sid]
+        player['holiday_releases_ready'] = True
         
-        # Set up awards (just Best Picture for now)
-        awards_data = game_logic.setup_awards(game_state.players, active_categories=['best_picture'])
+        player_name = player['name']
+        ready_count = sum(1 for p in game_state.players.values() if p.get('holiday_releases_ready', False))
+        total_count = len(game_state.players)
+        print(f"  {player_name} ready for Awards ({ready_count}/{total_count})")
         
-        if not awards_data:
-            print("Not enough films for awards! Skipping to final results.")
-            game_state.phase = 'game_complete'
+        # Check if all players ready
+        if all(p.get('holiday_releases_ready', False) for p in game_state.players.values()):
+            print("\n=== Starting Award Season ===\n")
+            
+            # Reset ready flag
+            for p in game_state.players.values():
+                p['holiday_releases_ready'] = False
+            
+            # Set up awards (just Best Picture for now)
+            awards_data = game_logic.setup_awards(game_state.players, active_categories=['best_picture'])
+            
+            if not awards_data:
+                print("Not enough films for awards! Skipping to final results.")
+                game_state.phase = 'game_complete'
+                broadcast_game_state()
+                return
+            
+            game_state.phase = 'awards_voting'
+            game_state.awards = awards_data
+            
+            print(f"Award Season initialized with categories: {awards_data['active_categories']}")
+            print(f"Nominees: {len(awards_data['categories']['best_picture']['nominees'])} films")
+            
             broadcast_game_state()
-            return
-        
-        game_state.phase = 'awards_voting'
-        game_state.awards = awards_data
-        
-        print(f"Award Season initialized with categories: {awards_data['active_categories']}")
-        print(f"Nominees: {len(awards_data['categories']['best_picture']['nominees'])} films")
-        
-        broadcast_game_state()
+        else:
+            broadcast_game_state()
     
     @socketio.on('vote_for_nominee')
     def handle_vote(data):
@@ -657,7 +702,32 @@ def register_handlers(socketio, game_state):
         game_state.phase = 'awards_results'
         broadcast_game_state()
     
+    @socketio.on('continue_from_awards')
+    def handle_continue_from_awards():
+        """Handle continuing from awards results to game complete"""
+        player = game_state.players[request.sid]
+        player['awards_results_ready'] = True
+        
+        player_name = player['name']
+        ready_count = sum(1 for p in game_state.players.values() if p.get('awards_results_ready', False))
+        total_count = len(game_state.players)
+        print(f"  {player_name} ready to end game ({ready_count}/{total_count})")
+        
+        # Check if all players ready
+        if all(p.get('awards_results_ready', False) for p in game_state.players.values()):
+            print("\n=== GAME COMPLETE ===\n")
+            
+            # Reset ready flags
+            for p in game_state.players.values():
+                p['awards_results_ready'] = False
+            
+            game_state.phase = 'game_complete'
+            broadcast_game_state()
+        else:
+            broadcast_game_state()
+    
     @socketio.on('disconnect')
+
     def handle_disconnect():
         if request.sid in game_state.players:
             player_name = game_state.players[request.sid]['name']

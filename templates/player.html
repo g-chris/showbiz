@@ -144,6 +144,7 @@
             <!-- Winner announcement will be inserted here -->
         </div>
         
+        <div id="bidding-ready-status" style="margin-top: 20px; text-align: center;"></div>
         <button onclick="continueAfterBidding()" style="margin-top: 20px; font-size: 18px; padding: 15px;">
             Continue
         </button>
@@ -195,6 +196,7 @@
         <h3>All Releases This Season:</h3>
         <div id="all-films"></div>
         
+        <div id="releases-ready-status" style="margin-top: 20px; text-align: center;"></div>
         <button onclick="continueGame()" id="continue-btn" style="margin-top: 20px;">Continue to Next Phase</button>
     </div>
     
@@ -217,6 +219,10 @@
         <h1>🏆 And the winner is...</h1>
         <div id="winner-announcement"></div>
         <div id="final-standings"></div>
+        <div id="awards-ready-status" style="margin-top: 20px; text-align: center;"></div>
+        <button onclick="continueFromAwards()" id="continue-awards-btn" style="margin-top: 20px; font-size: 18px; padding: 15px;">
+            Continue
+        </button>
     </div>
     
     <script src="{{ url_for('static', filename='js/player.js') }}"></script>

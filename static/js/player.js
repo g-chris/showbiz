@@ -579,6 +579,26 @@ function updateReleasesView(gameData, playerData, seasonName) {
             </div>
         `;
     });
+    
+    // Show ready status
+    const statusDiv = document.getElementById('releases-ready-status');
+    const readyFlag = seasonName === 'Spring' ? 'spring_releases_ready' : 'holiday_releases_ready';
+    const readyCount = Object.values(gameData.players).filter(p => p[readyFlag]).length;
+    const totalCount = Object.keys(gameData.players).length;
+    const imReady = playerData[readyFlag];
+    
+    if (imReady) {
+        statusDiv.innerHTML = `<p style="color: #4CAF50; font-size: 18px;">✓ You're ready! Waiting for others... (${readyCount}/${totalCount})</p>`;
+        continueBtn.disabled = true;
+    } else {
+        // Always re-enable the button if player hasn't clicked yet
+        continueBtn.disabled = false;
+        if (readyCount > 0) {
+            statusDiv.innerHTML = `<p style="color: #aaa; font-size: 16px;">${readyCount}/${totalCount} players ready</p>`;
+        } else {
+            statusDiv.innerHTML = '';
+        }
+    }
 }
 
 function continueToSummer() {
@@ -665,6 +685,26 @@ function updateAwardsResultsView(gameData, playerData) {
             </div>
         `;
     });
+    
+    // Show ready status
+    const statusDiv = document.getElementById('awards-ready-status');
+    const awardsBtn = document.getElementById('continue-awards-btn');
+    const readyCount = Object.values(gameData.players).filter(p => p.awards_results_ready).length;
+    const totalCount = Object.keys(gameData.players).length;
+    const imReady = playerData.awards_results_ready;
+    
+    if (imReady) {
+        statusDiv.innerHTML = `<p style="color: #4CAF50; font-size: 18px;">✓ You're ready! Waiting for others... (${readyCount}/${totalCount})</p>`;
+        awardsBtn.disabled = true;
+    } else {
+        // Always re-enable the button if player hasn't clicked yet
+        awardsBtn.disabled = false;
+        if (readyCount > 0) {
+            statusDiv.innerHTML = `<p style="color: #aaa; font-size: 16px;">${readyCount}/${totalCount} players ready</p>`;
+        } else {
+            statusDiv.innerHTML = '';
+        }
+    }
 }
 
 // ============================================================================
@@ -693,9 +733,18 @@ function updateBiddingView(gameData, playerData) {
     const isParticipant = biddingWar.participants.includes(socket.id);
     const hasAlreadyBid = biddingWar.bids && biddingWar.bids[socket.id] !== undefined;
     
+    // ALWAYS check if this is a new bidding war and reset bid amount
+    const currentCard = biddingWar.card_index;
+    if (window.lastBiddingCardIndex !== currentCard) {
+        currentBidAmount = 0;
+        window.lastBiddingCardIndex = currentCard;
+        console.log('New bidding war detected - reset bid to $0M');
+    }
+    
     console.log('  - isParticipant:', isParticipant);
     console.log('  - hasAlreadyBid:', hasAlreadyBid);
     console.log('  - cardData:', cardData);
+    console.log('  - currentBidAmount:', currentBidAmount);
 
      // Update budget display at top of screen
     document.getElementById('biddingMoney').textContent = playerData.money;
@@ -753,15 +802,7 @@ function updateBiddingView(gameData, playerData) {
         document.getElementById('currentBid').parentElement.parentElement.style.display = 'none';
         
     } else {
-        // Can bid - initialize ONLY if this is a new bidding war
-        // Check if we've already started bidding on this specific card
-        const currentCard = biddingWar.card_index;
-        if (window.lastBiddingCardIndex !== currentCard) {
-        // New bidding war - reset bid
-        currentBidAmount = 0;
-        window.lastBiddingCardIndex = currentCard;
-        }
-
+        // Can bid - display controls
         updateBidDisplay(cardData.salary, playerData.money);
         document.getElementById('submit-bid-btn').disabled = false;
         document.getElementById('submit-bid-btn').style.display = 'block';
@@ -921,6 +962,26 @@ function updateBiddingResultsView(gameData, playerData) {
             ${isYou ? '<p style="font-size: 16px; color: #4CAF50; margin-top: 15px;">✓ ' + cardData.name + ' added to your roster!</p>' : ''}
         `;
     }
+    
+    // Show ready status
+    const statusDiv = document.getElementById('bidding-ready-status');
+    const biddingBtn = document.querySelector('#bidding-results-screen button');
+    const readyCount = Object.values(gameData.players).filter(p => p.bidding_results_ready).length;
+    const totalCount = Object.keys(gameData.players).length;
+    const imReady = playerData.bidding_results_ready;
+    
+    if (imReady) {
+        statusDiv.innerHTML = `<p style="color: #4CAF50; font-size: 18px;">✓ You're ready! Waiting for others... (${readyCount}/${totalCount})</p>`;
+        biddingBtn.disabled = true;
+    } else {
+        // Always re-enable the button if player hasn't clicked yet
+        biddingBtn.disabled = false;
+        if (readyCount > 0) {
+            statusDiv.innerHTML = `<p style="color: #aaa; font-size: 16px;">${readyCount}/${totalCount} players ready</p>`;
+        } else {
+            statusDiv.innerHTML = '';
+        }
+    }
 }
 
 function continueAfterBidding() {
@@ -929,6 +990,14 @@ function continueAfterBidding() {
      */
     console.log('Continuing after bidding war results');
     socket.emit('continue_after_bidding');
+}
+
+function continueFromAwards() {
+    /**
+     * Signal to server that we're ready to continue from awards results
+     */
+    console.log('Continuing from awards results');
+    socket.emit('continue_from_awards');
 }
 
 document.addEventListener('keypress', (e) => {

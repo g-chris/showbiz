@@ -342,7 +342,7 @@ AWARD_CATEGORIES = {
         nominees_count=5,
         scoring_attribute='prestige',
         can_vote_for_own=False,
-        points_value=50
+        points_value=1000
     ),
     'best_actor': AwardCategory(
         name='Best Actor',
