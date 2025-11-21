@@ -126,6 +126,7 @@ def register_handlers(socketio, game_state):
     @socketio.on('start_phase1')
     def handle_start_phase1():
         print("Starting Phase 1: Winter Production")
+        game_state.selected_roles_this_phase = []
         game_state.phase = 'phase1_production'
         game_state.year = 1
         game_state.turn = 1
@@ -424,6 +425,9 @@ def register_handlers(socketio, game_state):
         
         player['money'] -= total_cost
         player['roles'].append(card.copy())
+
+        if card['name'] not in game_state.selected_roles_this_phase:
+            game_state.selected_roles_this_phase.append(card['name'])
     
     def advance_turn():
         """Move to next turn or phase"""
@@ -577,6 +581,7 @@ def register_handlers(socketio, game_state):
     @socketio.on('continue_to_summer')
     def handle_continue_to_summer():
         """Start Phase 2: Summer Production - wait for all players"""
+        game_state.selected_roles_this_phase = []
         player = game_state.players[request.sid]
         player['spring_releases_ready'] = True
         

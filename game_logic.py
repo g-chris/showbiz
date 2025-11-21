@@ -51,6 +51,7 @@ class GameState:
         }
         self.no_name_talent = {}
         self.awards = None
+        self.selected_roles_this_phase = []
     
     def to_dict(self):
         """Convert state to dictionary for broadcasting"""
@@ -169,7 +170,10 @@ def generate_turn_cards(game_state):
     cards = []
     
     # Add existing talent
-    available_talent = [t.copy() for t in game_state.talent_pool]
+    available_talent = [
+        t.copy() for t in game_state.talent_pool
+        if t['name'] not in game_state.selected_roles_this_phase
+    ]
     if len(available_talent) >= num_cards - 1:
         cards = random.sample(available_talent, num_cards - 1)
     else:
