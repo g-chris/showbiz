@@ -74,22 +74,22 @@ class GameState:
 def get_heat_bucket(heat):
     """Convert heat value to bucket"""
     if heat < 64:
-        return "Unknown"
+        return "Unknown (*)"
     elif heat < 128:
-        return "Building"
+        return "Building (**)"
     elif heat < 192:
-        return "Buzzing"
+        return "Buzzing (***)"
     else:
-        return "Superstar"
+        return "Superstar (****)"
 
 def get_prestige_bucket(prestige):
     """Convert prestige value to bucket"""
     if prestige < 34:
-        return "Mainstream"
+        return "Mainstream (*)"
     elif prestige < 67:
-        return "Artist"
+        return "Artist (**)"
     else:
-        return "Auteur"
+        return "Auteur (***)"
 
 def generate_talent_stats(role_type, name, is_producer=False):
     """Generate Heat, Prestige, and Salary for a talent"""
