@@ -184,11 +184,19 @@ socket.on('game_update', (data) => {
         document.getElementById('submit-btn').disabled = false;
         document.getElementById('talentName').disabled = false;
         
-        // Pre-fill with default name
-        const defaultName = getDefaultName(currentRole, currentCount);
-        document.getElementById('talentName').value = defaultName;
-        document.getElementById('talentName').select();
-        document.getElementById('talentName').focus();
+        // ONLY pre-fill with default name if this is a NEW role type
+        // (prevents resetting player's input when other players submit)
+        const roleKey = `${currentRole}_${currentCount}`;
+        if (window.lastNamingRole !== roleKey) {
+            const defaultName = getDefaultName(currentRole, currentCount);
+            document.getElementById('talentName').value = defaultName;
+            document.getElementById('talentName').select();
+            document.getElementById('talentName').focus();
+            window.lastNamingRole = roleKey;
+            console.log('🆕 New role to name - pre-filled with:', defaultName);
+        } else {
+            console.log('✅ Same role - preserving user input');
+        }
         
     } else if (data.phase === 'phase0_complete') {
         showScreen('phase0-complete-screen');
