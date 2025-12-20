@@ -834,6 +834,35 @@ function updateBiddingView(gameData, playerData) {
         document.querySelector('[onclick="increaseBid()"]').style.visibility = 'visible';
         document.getElementById('currentBid').parentElement.parentElement.style.visibility = 'visible';
     }
+
+    // Show disconnect status for waiting participants (if already bid)
+    if (hasAlreadyBid) {
+        const disconnectTimes = biddingWar.disconnect_times || {};
+        const waitingParticipants = biddingWar.participants.filter(sid => !biddingWar.bids[sid]);
+
+        if (waitingParticipants.length > 0) {
+            let waitingHtml = '<div style="margin-top: 20px; color: #aaa; text-align: left;">';
+            waitingHtml += '<p style="margin: 5px 0;">Waiting for:</p><ul style="margin: 5px 0; padding-left: 20px;">';
+
+            waitingParticipants.forEach(sid => {
+                const playerName = data.players[sid]?.name || 'Unknown';
+                const isDisconnected = disconnectTimes[sid] !== undefined;
+
+                if (isDisconnected) {
+                    waitingHtml += `<li>${playerName} <span style="color: #ff9800;">(disconnected, auto-bidding soon...)</span></li>`;
+                } else {
+                    waitingHtml += `<li>${playerName}</li>`;
+                }
+            });
+
+            waitingHtml += '</ul></div>';
+
+            const statusEl = document.getElementById('bid-status');
+            if (statusEl && !statusEl.innerHTML.includes('Waiting for:')) {
+                statusEl.innerHTML += waitingHtml;
+            }
+        }
+    }
 }
 
 function updateBidDisplay(baseSalary, playerMoney) {

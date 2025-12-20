@@ -43,7 +43,36 @@ def register_handlers(socketio, game_state):
                 prog_data = game_state.naming_progress['submissions'][existing_sid]
                 del game_state.naming_progress['submissions'][existing_sid]
                 game_state.naming_progress['submissions'][request.sid] = prog_data
-            
+
+            # Update bidding war references if active
+            if game_state.bidding_war.get('active'):
+                # Update participants list
+                if existing_sid in game_state.bidding_war['participants']:
+                    participants = game_state.bidding_war['participants']
+                    idx = participants.index(existing_sid)
+                    participants[idx] = request.sid
+                    print(f'  🎲 Updated bidding war participant: {existing_sid[:8]} → {request.sid[:8]}')
+
+                # Transfer any submitted bid to new socket ID
+                if existing_sid in game_state.bidding_war['bids']:
+                    bid_amount = game_state.bidding_war['bids'][existing_sid]
+                    del game_state.bidding_war['bids'][existing_sid]
+                    game_state.bidding_war['bids'][request.sid] = bid_amount
+                    print(f'  💰 Transferred bid: ${bid_amount}M to new socket')
+
+                # Clear disconnect timer if they reconnected during bidding
+                if 'disconnect_times' in game_state.bidding_war:
+                    if existing_sid in game_state.bidding_war['disconnect_times']:
+                        del game_state.bidding_war['disconnect_times'][existing_sid]
+                        print(f'  ⏱️ Cancelled auto-bid timeout for {player_name}')
+
+            # Update player_selections if they had selected something
+            if existing_sid in game_state.player_selections:
+                selection = game_state.player_selections[existing_sid]
+                del game_state.player_selections[existing_sid]
+                game_state.player_selections[request.sid] = selection
+                print(f'  ✅ Transferred card selection to new socket')
+
             print(f'  ✅ Restored: ${player_data["money"]}M, {player_data["score"]} pts, {len(player_data.get("roles", []))} roles, {len(player_data.get("films", []))} films')
         else:
             # NEW PLAYER
@@ -416,7 +445,51 @@ def register_handlers(socketio, game_state):
         else:
             print(f"  Waiting for {num_participants - num_bids} more bid(s)...")
             broadcast_game_state()
-    
+
+    def schedule_auto_bid(disconnected_sid, player_name):
+        """
+        Schedule an automatic $0 bid for a disconnected participant.
+        If they reconnect before the timeout, this will be cancelled.
+        """
+        import threading
+        import time
+
+        def auto_submit_bid():
+            # Wait 60 seconds for reconnection
+            time.sleep(60)
+
+            # Check if still needed (player might have reconnected and bid)
+            if not game_state.bidding_war.get('active'):
+                print(f'  ⏭️ Auto-bid cancelled: bidding war already resolved')
+                return
+
+            if disconnected_sid not in game_state.bidding_war['participants']:
+                print(f'  ⏭️ Auto-bid cancelled: participant reconnected with new ID')
+                return
+
+            if disconnected_sid in game_state.bidding_war['bids']:
+                print(f'  ⏭️ Auto-bid cancelled: {player_name} already submitted bid')
+                return
+
+            # Still disconnected after timeout - auto-submit $0 bid
+            print(f'\n⏰ TIMEOUT: Auto-submitting $0 bid for disconnected player {player_name}')
+            game_state.bidding_war['bids'][disconnected_sid] = 0
+
+            # Check if this completes the bidding
+            num_bids = len(game_state.bidding_war['bids'])
+            num_participants = len(game_state.bidding_war['participants'])
+
+            if num_bids == num_participants:
+                print(f"✓ All {num_participants} participants have now submitted bids (including auto-bids)!")
+                resolve_bidding_war()
+            else:
+                print(f"  Waiting for {num_participants - num_bids} more bid(s)...")
+                broadcast_game_state()
+
+        # Start timeout thread
+        timeout_thread = threading.Thread(target=auto_submit_bid, daemon=True)
+        timeout_thread.start()
+
     def award_card_to_player(player_sid, card_index, extra_bid=0):
         """Give a card to a player and deduct cost"""
         card = game_state.current_turn_cards[card_index]
@@ -742,7 +815,27 @@ def register_handlers(socketio, game_state):
             player_name = game_state.players[request.sid]['name']
             print(f'📱 {player_name} disconnected (socket: {request.sid[:8]})')
             print(f'  💾 Player data preserved for reconnection')
-        
+
+            # Track disconnect during active bidding war
+            if game_state.bidding_war.get('active'):
+                if request.sid in game_state.bidding_war['participants']:
+                    if request.sid not in game_state.bidding_war['bids']:
+                        # They disconnected without submitting a bid
+                        print(f'  ⚠️ {player_name} disconnected during bidding war without submitting bid')
+
+                        # Add to bidding_war state to track disconnect time
+                        if 'disconnect_times' not in game_state.bidding_war:
+                            game_state.bidding_war['disconnect_times'] = {}
+
+                        import time
+                        game_state.bidding_war['disconnect_times'][request.sid] = time.time()
+
+                        # Schedule auto-bid after timeout
+                        schedule_auto_bid(request.sid, player_name)
+
+                        # Broadcast updated state to show disconnect status
+                        broadcast_game_state()
+
         # DON'T delete the player - keep their data for reconnection
         # When they reconnect, join_game will update their socket.id
         # This prevents losing progress when mobile phones go to sleep
