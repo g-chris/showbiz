@@ -1,12 +1,17 @@
 /* Hollywood Moguls - Shared Styles */
 
+html {
+    font-size: 100%; /* Critical: Inherit iOS system font size */
+}
+
 body {
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
     max-width: 1200px;
     margin: 20px auto;
     padding: 20px;
     background: #1a1a1a;
     color: #fff;
+    font-size: 1rem;
 }
 
 h1 { 
@@ -28,9 +33,9 @@ h2, h3, h4 {
 }
 
 button {
-    padding: 12px 24px;
+    padding: 0.75rem 1.5rem;
     margin: 5px 0;
-    font-size: 16px;
+    font-size: 1rem; 
     background: #e50914;
     color: white;
     border: none;
@@ -38,6 +43,7 @@ button {
     width: 100%;
     border-radius: 5px;
     box-sizing: border-box;
+    min-height: 44px;
 }
 
 button:hover { 
@@ -51,14 +57,15 @@ button:disabled {
 
 input, textarea {
     width: 100%;
-    padding: 15px;
+    padding: 0.9375rem;  /* Changed from 15px */
     margin: 10px 0;
-    font-size: 18px;
+    font-size: 1.125rem;  /* Changed from 18px - slightly larger for readability */
     box-sizing: border-box;
     background: #333;
     color: white;
     border: 1px solid #666;
     border-radius: 5px;
+    min-height: 44px;  /* ADD THIS - ensures touch target size */
 }
 
 input:focus, textarea:focus {
@@ -110,6 +117,7 @@ input:focus, textarea:focus {
     body {
         padding: 10px;
         margin: 10px;
+        font-size: 1rem;  /* Ensure base size is maintained */
     }
     
     .talent-card {
@@ -124,12 +132,21 @@ input:focus, textarea:focus {
     }
     
     h1 {
-        font-size: 24px;
+        font-size: 1.5rem;  /* Changed from 24px */
+        line-height: 1.3;  /* ADD THIS for better readability */
     }
     
     button {
-        font-size: 16px;
-        padding: 15px;
+        font-size: 1.125rem;  /* Changed from 16px - larger for easier tapping */
+        padding: 1rem;  /* Changed from 15px - more touch area */
+        min-height: 48px;  /* ADD THIS - Android recommended size */
+    }
+    
+    /* ADD THIS - ensure card buttons are easy to tap */
+    .info-box button,
+    .talent-card button {
+        margin-top: 10px;
+        min-height: 48px;
     }
 }
 
@@ -137,6 +154,12 @@ input:focus, textarea:focus {
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
+}
+
+@supports (font: -apple-system-body) {
+  html {
+    font: -apple-system-body; /* This inherits the full iOS font settings */
+  }
 }
 
 .screen.active {

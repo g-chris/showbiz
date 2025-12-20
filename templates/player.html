@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Hollywood Game - Player</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5.0">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -10,11 +10,11 @@
     <!-- Connection Status Indicator -->
     <div id="connection-status" style="
         position: fixed;
-        top: 10px;
-        right: 10px;
-        padding: 8px 15px;
-        border-radius: 5px;
-        font-size: 14px;
+        top: 0.625rem;
+        right: 0.625rem;
+        padding: 8px 0.9375rem;
+        border-radius: 0.3125rem;
+        font-size: 0.875rem;
         font-weight: bold;
         z-index: 9999;
         display: none;
@@ -46,7 +46,7 @@
         <div class="info-box">
             <h2>Name your <span id="roleType"></span></h2>
             <p id="roleProgress"></p>
-            <p style="font-size: 14px; color: #aaa;">A name is suggested - edit it or submit as-is!</p>
+            <p style="font-size: 0.875rem; color: #aaa;">A name is suggested - edit it or submit as-is!</p>
         </div>
         <input type="text" id="talentName" placeholder="Enter name">
         <button onclick="submitName()" id="submit-btn">Submit</button>
@@ -82,7 +82,7 @@
             <p>💰 Budget: $<span id="biddingMoney">100</span>M</p>
         </div>
         
-        <div style="background: #2a2a2a; border: 3px solid #FFD700; padding: 20px; margin: 20px 0; border-radius: 5px;">
+        <div style="background: #2a2a2a; border: 3px solid #FFD700; padding: 1.25rem; margin: 1.25rem 0; border-radius: 0.3125rem;">
             <h2 style="color: #FFD700; margin-top: 0; text-align: center;">CONTESTED ROLE</h2>
             <div id="contested-card" style="text-align: center;">
                 <!-- Card details will be inserted here -->
@@ -91,35 +91,35 @@
         
         <div class="info-box" style="background: #1a1a1a;">
             <h3 style="margin-top: 0;">Place Your Bid</h3>
-            <p style="color: #aaa; font-size: 14px;">Base Salary: $<span id="baseSalary">0</span>M</p>
+            <p style="color: #aaa; font-size: 0.875rem;">Base Salary: $<span id="baseSalary">0</span>M</p>
             
-            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin: 20px 0;">
-                <button onclick="decreaseBid()" style="width: 60px; height: 60px; font-size: 32px; background: #666;">-</button>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.9375rem; margin: 1.25rem 0;">
+                <button onclick="decreaseBid()" style="width: 3.75rem; height: 3.75rem; font-size: 2rem; background: #666;">-</button>
                 <div style="text-align: center;">
-                    <div style="font-size: 48px; font-weight: bold; color: #e50914; margin: 10px 0;">
+                    <div style="font-size: 3rem; font-weight: bold; color: #e50914; margin: 0.625rem 0;">
                         $<span id="currentBid">0</span>M
                     </div>
-                    <div style="font-size: 14px; color: #aaa;">Extra Bid</div>
+                    <div style="font-size: 0.875rem; color: #aaa;">Extra Bid</div>
                 </div>
-                <button onclick="increaseBid()" style="width: 60px; height: 60px; font-size: 32px;">+</button>
+                <button onclick="increaseBid()" style="width: 3.75rem; height: 3.75rem; font-size: 2rem;">+</button>
             </div>
             
-            <div style="border-top: 1px solid #666; padding-top: 15px; margin-top: 15px;">
-                <p style="font-size: 18px; margin: 5px 0;">
+            <div style="border-top: 1px solid #666; padding-top: 0.9375rem; margin-top: 0.9375rem;">
+                <p style="font-size: 1.125rem; margin: 0.3125rem 0;">
                     <strong>Total Cost:</strong> 
-                    <span style="color: #4CAF50; font-size: 24px;">$<span id="totalCost">0</span>M</span>
+                    <span style="color: #4CAF50; font-size: 1.5rem;">$<span id="totalCost">0</span>M</span>
                 </p>
-                <p id="affordabilityWarning" style="color: #ff9800; display: none; margin: 10px 0;">
+                <p id="affordabilityWarning" style="color: #ff9800; display: none; margin: 0.625rem 0;">
                     ⚠️ Cannot afford this bid!
                 </p>
             </div>
         </div>
         
-        <button onclick="submitBid()" id="submit-bid-btn" style="margin-top: 20px; font-size: 20px; padding: 15px;">
+        <button onclick="submitBid()" id="submit-bid-btn" style="margin-top: 1.25rem; font-size: 1.25rem; padding: 0.9375rem;">
             Submit Bid
         </button>
         
-        <div id="bid-status" style="margin-top: 20px;"></div>
+        <div id="bid-status" style="margin-top: 1.25rem;"></div>
     </div>
     
     <!-- Bidding Results Screen -->
@@ -131,21 +131,21 @@
             <p>💰 Budget: $<span id="resultsMoney">100</span>M</p>
         </div>
         
-        <div style="background: #2a2a2a; border: 2px solid #FFD700; padding: 20px; margin: 20px 0; border-radius: 5px;">
+        <div style="background: #2a2a2a; border: 2px solid #FFD700; padding: 1.25rem; margin: 1.25rem 0; border-radius: 0.3125rem;">
             <h2 style="color: #FFD700; margin-top: 0; text-align: center;">
                 <span id="contestedRoleName">Role Name</span>
             </h2>
-            <div id="all-bids" style="margin: 20px 0;">
+            <div id="all-bids" style="margin: 1.25rem 0;">
                 <!-- All bids will be displayed here -->
             </div>
         </div>
         
-        <div id="winner-announcement-box" style="text-align: center; padding: 30px; margin: 20px 0;">
+        <div id="winner-announcement-box" style="text-align: center; padding: 30px; margin: 1.25rem 0;">
             <!-- Winner announcement will be inserted here -->
         </div>
         
-        <div id="bidding-ready-status" style="margin-top: 20px; text-align: center;"></div>
-        <button onclick="continueAfterBidding()" style="margin-top: 20px; font-size: 18px; padding: 15px;">
+        <div id="bidding-ready-status" style="margin-top: 1.25rem; text-align: center;"></div>
+        <button onclick="continueAfterBidding()" style="margin-top: 1.25rem; font-size: 1.125rem; padding: 0.9375rem;">
             Continue
         </button>
     </div>
@@ -168,9 +168,9 @@
         </div>
         
         <div id="package-actions" style="display:none;">
-            <input type="text" id="filmTitle" placeholder="Film Title" style="margin: 10px 0;">
+            <input type="text" id="filmTitle" placeholder="Film Title" style="margin: 0.625rem 0;">
             <textarea id="filmTeaser" placeholder="Short teaser (optional)" 
-                      style="width: 100%; height: 60px; padding: 10px; background: #333; color: white; border: 1px solid #666; margin: 10px 0;"></textarea>
+                      style="width: 100%; height: 3.75rem; padding: 0.625rem; background: #333; color: white; border: 1px solid #666; margin: 0.625rem 0;"></textarea>
             <button onclick="greenlight()">Greenlight This Film!</button>
             <button onclick="clearPackage()" style="background: #666;">Clear Package</button>
         </div>
@@ -196,8 +196,8 @@
         <h3>All Releases This Season:</h3>
         <div id="all-films"></div>
         
-        <div id="releases-ready-status" style="margin-top: 20px; text-align: center;"></div>
-        <button onclick="continueGame()" id="continue-btn" style="margin-top: 20px;">Continue to Next Phase</button>
+        <div id="releases-ready-status" style="margin-top: 1.25rem; text-align: center;"></div>
+        <button onclick="continueGame()" id="continue-btn" style="margin-top: 1.25rem;">Continue to Next Phase</button>
     </div>
     
     <!-- Awards Voting Screen -->
@@ -219,8 +219,8 @@
         <h1>🏆 And the winner is...</h1>
         <div id="winner-announcement"></div>
         <div id="final-standings"></div>
-        <div id="awards-ready-status" style="margin-top: 20px; text-align: center;"></div>
-        <button onclick="continueFromAwards()" id="continue-awards-btn" style="margin-top: 20px; font-size: 18px; padding: 15px;">
+        <div id="awards-ready-status" style="margin-top: 1.25rem; text-align: center;"></div>
+        <button onclick="continueFromAwards()" id="continue-awards-btn" style="margin-top: 1.25rem; font-size: 1.125rem; padding: 0.9375rem;">
             Continue
         </button>
     </div>
