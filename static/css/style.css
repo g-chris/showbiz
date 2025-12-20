@@ -158,7 +158,7 @@ input:focus, textarea:focus {
 
 @supports (font: -apple-system-body) {
   html {
-    font: -apple-system-body; /* This inherits the full iOS font settings */
+    font: -apple-system-body;
   }
 }
 

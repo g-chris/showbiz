@@ -346,7 +346,11 @@ def register_handlers(socketio, game_state):
         
         # Reset active bidding war
         game_state.bidding_war['active'] = False
-        
+
+        # CRITICAL FIX: Clear player selections BEFORE returning to production phase
+        # This prevents the UI from showing stale "selected" status
+        game_state.player_selections = {}
+
         # Return to production phase
         if 'phase1' in game_state.phase:
             game_state.phase = 'phase1_production'

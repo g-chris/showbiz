@@ -305,9 +305,22 @@ function updateRoleInventory(roles, elementId) {
 }
 
 function renderProductionCards(data, myData) {
+    console.log('🎬 Rendering production cards:', {
+        phase: data.phase,
+        turn: data.turn,
+        player_selections: data.player_selections,
+        my_selection: data.player_selections?.[socket.id]
+    });
+
+    // Safety check: if phase is production, selections should be empty or valid for current turn
+    if ((data.phase === 'phase1_production' || data.phase === 'phase2_production') &&
+        data.player_selections && Object.keys(data.player_selections).length > 0) {
+        console.warn('⚠️ WARNING: Production phase has non-empty player_selections:', data.player_selections);
+    }
+
     const cardsArea = document.getElementById('cards-area');
     cardsArea.innerHTML = '';
-    
+
     if (!data.current_turn_cards || data.current_turn_cards.length === 0) {
         cardsArea.innerHTML = '<p style="color: red;">ERROR: No cards available!</p>';
         return;
@@ -786,11 +799,11 @@ function updateBiddingView(gameData, playerData) {
         `;
         document.getElementById('submit-bid-btn').disabled = true;
         document.getElementById('submit-bid-btn').style.display = 'none';
-        
+
         // Hide bid controls
-        document.querySelector('[onclick="decreaseBid()"]').style.display = 'none';
-        document.querySelector('[onclick="increaseBid()"]').style.display = 'none';
-        
+        document.querySelector('[onclick="decreaseBid()"]').style.visibility = 'hidden';
+        document.querySelector('[onclick="increaseBid()"]').style.visibility = 'hidden';
+
     } else if (hasAlreadyBid) {
         // Already submitted bid
         const myBid = biddingWar.bids[socket.id];
@@ -805,9 +818,9 @@ function updateBiddingView(gameData, playerData) {
         document.getElementById('submit-bid-btn').style.display = 'none';
         
         // Hide bid controls
-        document.querySelector('[onclick="decreaseBid()"]').style.display = 'none';
-        document.querySelector('[onclick="increaseBid()"]').style.display = 'none';
-        document.getElementById('currentBid').parentElement.parentElement.style.display = 'none';
+        document.querySelector('[onclick="decreaseBid()"]').style.visibility = 'hidden';
+        document.querySelector('[onclick="increaseBid()"]').style.visibility = 'hidden';
+        document.getElementById('currentBid').parentElement.parentElement.style.visibility = 'hidden';
         
     } else {
         // Can bid - display controls
@@ -817,9 +830,9 @@ function updateBiddingView(gameData, playerData) {
         document.getElementById('bid-status').innerHTML = '';
         
         // Show bid controls
-        document.querySelector('[onclick="decreaseBid()"]').style.display = 'inline-block';
-        document.querySelector('[onclick="increaseBid()"]').style.display = 'inline-block';
-        document.getElementById('currentBid').parentElement.parentElement.style.display = 'flex';
+        document.querySelector('[onclick="decreaseBid()"]').style.visibility = 'visible';
+        document.querySelector('[onclick="increaseBid()"]').style.visibility = 'visible';
+        document.getElementById('currentBid').parentElement.parentElement.style.visibility = 'visible';
     }
 }
 
