@@ -52,6 +52,7 @@ class GameState:
         self.no_name_talent = {}
         self.awards = None
         self.selected_roles_this_phase = []
+        self.advancing_turn = False       # Prevent multiple advance_turn() calls
     
     def to_dict(self):
         """Convert state to dictionary for broadcasting"""

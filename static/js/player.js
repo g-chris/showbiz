@@ -788,21 +788,46 @@ function updateBiddingView(gameData, playerData) {
     document.getElementById('baseSalary').textContent = cardData.salary;
     
     if (!isParticipant) {
-        // Not participating in this bidding war
+        // Not participating in this bidding war - show spectator view
+
+        // Build list of participants
+        let participantsList = '<div style="margin-top: 20px;">';
+        participantsList += '<h3 style="color: #FFD700; margin-bottom: 10px;">⚔️ Players in this Bidding War:</h3>';
+
+        biddingWar.participants.forEach(sid => {
+            const player = gameData.players[sid];
+            const hasBid = biddingWar.bids && biddingWar.bids[sid] !== undefined;
+            const status = hasBid ? '<span style="color: #4CAF50;">✓ Bid Submitted</span>' : '<span style="color: #ff9800;">⏳ Bidding...</span>';
+
+            participantsList += `
+                <div class="info-box" style="background: #1a1a1a; margin: 10px 0; padding: 15px; border-left: 4px solid #FFD700;">
+                    <p style="font-size: 18px; margin: 0;">
+                        <strong>${player.name}</strong>
+                    </p>
+                    <p style="margin: 5px 0; color: #aaa;">
+                        💰 Budget: $${player.money}M | ${status}
+                    </p>
+                </div>
+            `;
+        });
+
+        participantsList += '</div>';
+
         document.getElementById('bid-status').innerHTML = `
-            <div class="info-box" style="background: #2a2a2a; text-align: center;">
-                <p style="font-size: 18px; color: #aaa;">
-                    You're not involved in this bidding war.
+            <div class="info-box" style="background: #1a1a1a; border: 3px dashed #666; text-align: center; padding: 20px;">
+                <h2 style="color: #888; margin-top: 0; font-size: 24px;">👀 Spectating</h2>
+                <p style="font-size: 18px; color: #aaa; margin: 10px 0;">
+                    You're not involved in this bidding war
                 </p>
-                <p style="margin-top: 10px;">Waiting for other players to bid...</p>
+                <p style="color: #666; margin-top: 10px;">Waiting for bidding to complete...</p>
             </div>
+            ${participantsList}
         `;
         document.getElementById('submit-bid-btn').disabled = true;
         document.getElementById('submit-bid-btn').style.display = 'none';
 
-        // Hide bid controls
-        document.querySelector('[onclick="decreaseBid()"]').style.visibility = 'hidden';
-        document.querySelector('[onclick="increaseBid()"]').style.visibility = 'hidden';
+        // Hide bid controls completely
+        document.querySelector('[onclick="decreaseBid()"]').parentElement.style.display = 'none';
 
     } else if (hasAlreadyBid) {
         // Already submitted bid

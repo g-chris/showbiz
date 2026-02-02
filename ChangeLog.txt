@@ -1,0 +1,30 @@
+# Hollywood Moguls - Change Log
+
+## Version 0.1.1 (2026-02-01)
+
+### Bug Fixes
+- **Fixed turn 3 repeating bug in production seasons**
+  - Issue: Turn 3 would occur multiple times (up to 3 times) during production seasons,
+    resulting in 7 turns instead of the expected 5 before packaging
+  - Root cause: The advance_turn() function could be called multiple times in rapid
+    succession when bidding wars were resolving
+  - Solution: Added guard flag to prevent re-entry into advance_turn() during the
+    same turn resolution cycle
+  - Files modified: game_logic.py, socket_handlers.py
+
+### Quality of Life Improvements
+- **Disabled tap-to-zoom on Bidding War +/- buttons (iOS)**
+  - Issue: Rapidly tapping the increment/decrement buttons triggered the iOS zoom gesture
+  - Solution: Added touch-action: manipulation CSS property to prevent double-tap zoom
+    while maintaining tap functionality
+  - Files modified: templates/player.html
+
+- **Enhanced spectator view for non-participating players during Bidding Wars**
+  - Issue: Non-participating players had a screen too similar to participants (just greyed out),
+    making it unclear who was involved
+  - Solution: Created visually distinct "Spectating" screen that shows:
+    - Clear spectator status indicator
+    - List of participating players
+    - Each participant's budget and bid status
+    - Completely hidden bid controls (not just disabled)
+  - Files modified: static/js/player.js

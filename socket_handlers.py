@@ -508,38 +508,49 @@ def register_handlers(socketio, game_state):
     
     def advance_turn():
         """Move to next turn or phase"""
-        game_state.turn += 1
-        
-        # Determine which phase we're in
-        current_phase = game_state.phase
-        
-        if game_state.turn <= 5:
-            # Continue current production phase
-            if current_phase == 'phase1_production':
-                game_state.phase = 'phase1_production'
-                print(f"\n=== Starting Turn {game_state.turn} ===\n")
-            elif current_phase == 'phase2_production':
-                game_state.phase = 'phase2_production'
-                print(f"\n=== Starting Turn {game_state.turn} ===\n")
-            start_new_turn()
-        else:
-            # Move to packaging phase and provide no-name talent
-            if current_phase == 'phase1_production':
-                game_state.phase = 'phase1_packaging'
-                print("\n=== Winter production complete! Packaging phase ===\n")
-            elif current_phase == 'phase2_production':
-                game_state.phase = 'phase2_packaging'
-                print("\n=== Summer production complete! Packaging phase ===\n")
-            
-            # Give each player access to no-name talent
-            no_name_talent = game_logic.generate_no_name_talent()
-            game_state.no_name_talent = no_name_talent
-            
-            for sid, player in game_state.players.items():
-                role_count = len(player.get('roles', []))
-                print(f"  {player['name']} has {role_count} roles + no-name talent available")
-        
-        broadcast_game_state()
+        # Prevent multiple calls during the same turn resolution
+        if game_state.advancing_turn:
+            print("⚠️  advance_turn() already in progress, skipping duplicate call")
+            return
+
+        game_state.advancing_turn = True
+
+        try:
+            game_state.turn += 1
+
+            # Determine which phase we're in
+            current_phase = game_state.phase
+
+            if game_state.turn <= 5:
+                # Continue current production phase
+                if current_phase == 'phase1_production':
+                    game_state.phase = 'phase1_production'
+                    print(f"\n=== Starting Turn {game_state.turn} ===\n")
+                elif current_phase == 'phase2_production':
+                    game_state.phase = 'phase2_production'
+                    print(f"\n=== Starting Turn {game_state.turn} ===\n")
+                start_new_turn()
+            else:
+                # Move to packaging phase and provide no-name talent
+                if current_phase == 'phase1_production':
+                    game_state.phase = 'phase1_packaging'
+                    print("\n=== Winter production complete! Packaging phase ===\n")
+                elif current_phase == 'phase2_production':
+                    game_state.phase = 'phase2_packaging'
+                    print("\n=== Summer production complete! Packaging phase ===\n")
+
+                # Give each player access to no-name talent
+                no_name_talent = game_logic.generate_no_name_talent()
+                game_state.no_name_talent = no_name_talent
+
+                for sid, player in game_state.players.items():
+                    role_count = len(player.get('roles', []))
+                    print(f"  {player['name']} has {role_count} roles + no-name talent available")
+
+            broadcast_game_state()
+        finally:
+            # Always reset the flag, even if an exception occurs
+            game_state.advancing_turn = False
     
     @socketio.on('continue_after_bidding')
     def handle_continue_after_bidding():
