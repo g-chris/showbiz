@@ -7,8 +7,13 @@
 </head>
 <body>
     <h1>🎬 Hollywood Moguls - Host View</h1>
-    <p style="color: #888; font-size: 14px; margin: 5px 0;">Version 0.1.1</p>
-    <p>Players connect at: <strong>http://YOUR_LOCAL_IP:8080/player</strong></p>
+    <p style="color: #888; font-size: 14px; margin: 5px 0;">Version 0.2.1</p>
+
+    <div style="text-align: center; margin: 20px 0; background: #2a2a2a; padding: 20px; border-radius: 10px;">
+        <h3 style="margin-top: 0;">📱 Players Scan to Join</h3>
+        <img src="/qr-code" alt="Join Game QR Code" style="border: 3px solid #333; padding: 10px; background: white; border-radius: 5px;">
+        <p id="player-url" style="font-size: 16px; color: #4CAF50; margin-top: 10px; font-weight: bold;"></p>
+    </div>
     
     <div class="phase-info">
         <h2>Phase: <span id="phase">Lobby</span></h2>

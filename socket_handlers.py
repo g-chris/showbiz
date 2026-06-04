@@ -4,6 +4,7 @@ Socket.IO event handlers for Hollywood Moguls
 from flask import request
 from flask_socketio import emit
 import game_logic
+import threading
 
 def register_handlers(socketio, game_state):
     """Register all socket event handlers"""
@@ -149,7 +150,10 @@ def register_handlers(socketio, game_state):
                 game_logic.handle_duplicate_names(game_state.talent_pool)
                 game_state.phase = 'phase0_complete'
                 print("Phase 0 complete! All talent generated.")
-        
+
+                # AUTO-PROGRESS: Start Phase 1 after 3 seconds
+                threading.Timer(3.0, handle_start_phase1).start()
+
         broadcast_game_state()
     
     @socketio.on('start_phase1')
@@ -183,7 +187,10 @@ def register_handlers(socketio, game_state):
         print(f"Generated {len(cards)} cards:")
         for i, card in enumerate(cards):
             print(f"  Card {i}: {card['name']} ({card['role']})")
-    
+
+        # Start 1-minute timer for talent selection
+        start_timer('talent_selection', 60, game_state.phase, 'pass')
+
     @socketio.on('select_card')
     def handle_select_card(data):
         # Prevent re-selection during same turn
@@ -224,8 +231,11 @@ def register_handlers(socketio, game_state):
     
     def resolve_selections():
         """Check for bidding wars and award cards"""
+        # Clear talent selection timer since all players have selected
+        clear_timer()
+
         selections = game_state.player_selections
-        
+
         print(f"\n=== Resolving Turn {game_state.turn} ===")
         for sid, sel in selections.items():
             player_name = game_state.players[sid]['name']
@@ -316,10 +326,13 @@ def register_handlers(socketio, game_state):
         player_names = [game_state.players[sid]['name'] for sid in participants]
         print(f"\n🎬 STARTING BIDDING WAR for {card_data['name']}")
         print(f"   Participants: {', '.join(player_names)}")
-        
+
         # Store uncontested_cards for later use
         game_state.bidding_war['uncontested_cards'] = uncontested_cards
-        
+
+        # Start 30-second timer for bidding
+        start_timer('bidding', 30, game_state.phase, 'bid_zero')
+
         broadcast_game_state()
     
     def resolve_bidding_war():
@@ -327,6 +340,9 @@ def register_handlers(socketio, game_state):
         Determine the winner of a bidding war and award the card.
         Called after all participants have submitted bids.
         """
+        # Clear bidding timer since all bids are in
+        clear_timer()
+
         bids = game_state.bidding_war['bids']
         participants = game_state.bidding_war['participants']
         card_data = game_state.bidding_war['card_data']
@@ -363,7 +379,10 @@ def register_handlers(socketio, game_state):
             game_state.phase = 'phase1_bidding_results'
         elif game_state.phase == 'phase2_bidding':
             game_state.phase = 'phase2_bidding_results'
-        
+
+        # Start 20-second continue timer
+        start_timer('continue', 20, game_state.phase, 'auto_ready')
+
         broadcast_game_state()
     
     def continue_after_bidding_results():
@@ -551,7 +570,180 @@ def register_handlers(socketio, game_state):
         finally:
             # Always reset the flag, even if an exception occurs
             game_state.advancing_turn = False
-    
+
+    # ============================================================================
+    # TIMER MANAGEMENT SYSTEM
+    # ============================================================================
+
+    def start_timer(timer_type, duration_seconds, phase, auto_action):
+        """Start a server-synchronized timer"""
+        import time
+        game_state.active_timer = {
+            'type': timer_type,
+            'duration': duration_seconds,
+            'start_time': time.time(),
+            'phase': phase,
+            'auto_action': auto_action
+        }
+        print(f"\n⏱️  TIMER STARTED: {timer_type} ({duration_seconds}s) for {phase}\n")
+        broadcast_game_state()
+
+        # Schedule auto-action after duration
+        threading.Timer(duration_seconds, handle_timer_expiry).start()
+
+    def handle_timer_expiry():
+        """Called when timer reaches 0"""
+        if not game_state.active_timer['type']:
+            print("⏱️  Timer expired but was already cancelled")
+            return  # Timer was cancelled
+
+        timer_type = game_state.active_timer['type']
+        print(f"\n⏰ TIMER EXPIRED: {timer_type}\n")
+
+        # Silently clear FIRST so auto-actions can start new timers without being overwritten.
+        # Do NOT broadcast here - the action functions handle broadcasting with the correct new state.
+        game_state.active_timer = {
+            'type': None,
+            'duration': 0,
+            'start_time': None,
+            'phase': None,
+            'auto_action': None
+        }
+
+        # Trigger auto-action (may start new timers - that is fine now that we cleared first)
+        if timer_type == 'talent_selection':
+            auto_submit_talent_passes()
+        elif timer_type == 'bidding':
+            auto_submit_missing_bids()
+        elif timer_type == 'continue':
+            auto_ready_all_players()
+
+    def clear_timer():
+        """Reset timer state"""
+        if game_state.active_timer['type']:
+            print(f"⏱️  Timer cleared: {game_state.active_timer['type']}")
+        game_state.active_timer = {
+            'type': None,
+            'duration': 0,
+            'start_time': None,
+            'phase': None,
+            'auto_action': None
+        }
+        broadcast_game_state()
+
+    def auto_submit_talent_passes():
+        """Auto-pass for players who haven't selected"""
+        for sid, player in game_state.players.items():
+            if sid not in game_state.player_selections:
+                # Auto-pass for this player
+                game_state.player_selections[sid] = 'pass'
+                print(f"⏰ AUTO-PASS: {player['name']} (timer expired)")
+
+        # Trigger resolution
+        if len(game_state.player_selections) == len(game_state.players):
+            resolve_selections()
+
+    def auto_submit_missing_bids():
+        """Auto-submit $0 bid for participants who haven't bid"""
+        if not game_state.bidding_war.get('active', False):
+            print("⚠️  Cannot auto-submit bids: no active bidding war")
+            return
+
+        for sid in game_state.bidding_war['participants']:
+            if sid not in game_state.bidding_war['bids']:
+                game_state.bidding_war['bids'][sid] = 0
+                player_name = game_state.players[sid]['name']
+                print(f"⏰ AUTO-BID $0: {player_name} (timer expired)")
+
+        # Trigger resolution
+        resolve_bidding_war()
+
+    def auto_ready_all_players():
+        """Auto-ready players who haven't clicked continue and trigger progression"""
+        phase = game_state.phase
+        print(f"\n⏰ AUTO-READY triggered for phase: {phase}\n")
+
+        # Set flags for all players based on phase
+        if phase == 'phase1_releases':
+            # Spring Releases → Summer Production
+            for player in game_state.players.values():
+                if not player.get('spring_releases_ready', False):
+                    player['spring_releases_ready'] = True
+                    print(f"⏰ AUTO-READY: {player['name']} (Spring releases)")
+
+            # Trigger progression to Summer
+            print("\n=== All players auto-readied - Starting Phase 2: Summer Production ===\n")
+            game_state.phase = 'phase2_production'
+            game_state.turn = 1
+            game_state.selected_roles_this_phase = []
+
+            # Reset ready flags
+            for p in game_state.players.values():
+                p['spring_ready'] = False
+                p['holiday_ready'] = False
+                p['spring_releases_ready'] = False
+
+            start_new_turn()
+
+        elif phase == 'phase2_releases':
+            # Holiday Releases → Award Season
+            for player in game_state.players.values():
+                if not player.get('holiday_releases_ready', False):
+                    player['holiday_releases_ready'] = True
+                    print(f"⏰ AUTO-READY: {player['name']} (Holiday releases)")
+
+            # Trigger progression to Awards
+            print("\n=== All players auto-readied - Starting Award Season ===\n")
+
+            # Reset ready flag
+            for p in game_state.players.values():
+                p['holiday_releases_ready'] = False
+
+            # Set up awards
+            awards_data = game_logic.setup_awards(game_state.players, active_categories=['best_picture'])
+
+            if not awards_data:
+                print("Not enough films for awards! Skipping to final results.")
+                game_state.phase = 'game_complete'
+            else:
+                game_state.awards = awards_data
+                game_state.phase = 'voting'
+
+        elif phase == 'awards_results':
+            # Awards Results → Game Complete
+            for player in game_state.players.values():
+                if not player.get('awards_results_ready', False):
+                    player['awards_results_ready'] = True
+                    print(f"⏰ AUTO-READY: {player['name']} (Awards results)")
+
+            # Trigger game completion
+            print("\n=== All players auto-readied - GAME COMPLETE ===\n")
+
+            # Reset ready flags
+            for p in game_state.players.values():
+                p['awards_results_ready'] = False
+
+            game_state.phase = 'game_complete'
+
+        elif 'bidding_results' in phase:
+            # Bidding Results → Next conflict or continue turn
+            for player in game_state.players.values():
+                if not player.get('bidding_results_ready', False):
+                    player['bidding_results_ready'] = True
+                    print(f"⏰ AUTO-READY: {player['name']} (Bidding results)")
+
+            # Reset ready flags
+            for p in game_state.players.values():
+                p['bidding_results_ready'] = False
+
+            # Trigger progression
+            continue_after_bidding_results()
+        else:
+            print(f"⚠️  Cannot auto-ready: unknown phase {phase}")
+            return
+
+        broadcast_game_state()
+
     @socketio.on('continue_after_bidding')
     def handle_continue_after_bidding():
         """
@@ -568,10 +760,13 @@ def register_handlers(socketio, game_state):
         
         # Check if all players ready
         if all(p.get('bidding_results_ready', False) for p in game_state.players.values()):
+            # Clear continue timer since all players are ready
+            clear_timer()
+
             # Reset ready flags
             for p in game_state.players.values():
                 p['bidding_results_ready'] = False
-            
+
             continue_after_bidding_results()
         else:
             broadcast_game_state()
@@ -664,6 +859,10 @@ def register_handlers(socketio, game_state):
         """Generic function to handle any release phase"""
         game_state.phase = phase_name
         game_logic.process_film_releases(game_state.players, season_name)
+
+        # Start 20-second continue timer for releases screen
+        start_timer('continue', 20, phase_name, 'auto_ready')
+
         broadcast_game_state()
     
     @socketio.on('continue_to_summer')
@@ -680,6 +879,9 @@ def register_handlers(socketio, game_state):
         
         # Check if all players ready
         if all(p.get('spring_releases_ready', False) for p in game_state.players.values()):
+            # Clear continue timer since all players are ready
+            clear_timer()
+
             print("\n=== Starting Phase 2: Summer Production ===\n")
             game_state.phase = 'phase2_production'
             game_state.turn = 1
@@ -708,8 +910,11 @@ def register_handlers(socketio, game_state):
         
         # Check if all players ready
         if all(p.get('holiday_releases_ready', False) for p in game_state.players.values()):
+            # Clear continue timer since all players are ready
+            clear_timer()
+
             print("\n=== Starting Award Season ===\n")
-            
+
             # Reset ready flag
             for p in game_state.players.values():
                 p['holiday_releases_ready'] = False
@@ -793,6 +998,10 @@ def register_handlers(socketio, game_state):
         
         # Move to results phase
         game_state.phase = 'awards_results'
+
+        # Start 20-second continue timer for awards results
+        start_timer('continue', 20, 'awards_results', 'auto_ready')
+
         broadcast_game_state()
     
     @socketio.on('continue_from_awards')
@@ -808,6 +1017,9 @@ def register_handlers(socketio, game_state):
         
         # Check if all players ready
         if all(p.get('awards_results_ready', False) for p in game_state.players.values()):
+            # Clear continue timer since all players are ready
+            clear_timer()
+
             print("\n=== GAME COMPLETE ===\n")
             
             # Reset ready flags

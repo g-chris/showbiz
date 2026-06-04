@@ -2,6 +2,14 @@
 
 const socket = io();
 
+// Fetch and display player URL on page load
+fetch('/api/player-url')
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('player-url').textContent = data.url;
+    })
+    .catch(err => console.error('Failed to fetch player URL:', err));
+
 socket.on('game_update', (data) => {
     updateDisplay(data);
 });
@@ -69,9 +77,10 @@ function updateDisplay(state) {
                 `;
             });
         }
-        
-        document.getElementById('start-btn').innerHTML = 'Start Phase 1 (Production)';
-        document.getElementById('start-btn').onclick = startPhase1;
+
+        // Hide manual start button - phase auto-advances
+        document.getElementById('start-btn').style.display = 'none';
+        contentDiv.innerHTML += '<p style="color: #888; text-align: center; margin-top: 30px; font-size: 18px;">⏱️ Phase 1 will auto-start in 3 seconds...</p>';
     } else if (state.phase === 'phase1_production') {
         detailsDiv.innerHTML = `<p>☃️ Winter - Year ${state.year}, Turn ${state.turn} of 5</p>`;
         contentDiv.innerHTML = '<h3>Available Roles This Turn:</h3>';
@@ -239,9 +248,9 @@ function updateDisplay(state) {
             `;
         });
         contentDiv.innerHTML += '</div>';
-        
-        // Button to continue to Summer
-        contentDiv.innerHTML += '<button onclick="continueToSummer()" style="margin-top: 20px; padding: 15px 30px; font-size: 18px;">Continue to Summer Production ☀️</button>';
+
+        // Show auto-progress message instead of manual button
+        contentDiv.innerHTML += '<p style="color: #888; text-align: center; margin-top: 30px; font-size: 18px;">⏱️ Will auto-advance to Summer when all players ready (or after timer)</p>';
         
     } else if (state.phase === 'phase2_production') {
         detailsDiv.innerHTML = `<p>☀️ Summer - Year ${state.year}, Turn ${state.turn} of 5</p>`;
@@ -410,9 +419,9 @@ function updateDisplay(state) {
             `;
         });
         contentDiv.innerHTML += '</div>';
-        
-        // Button to continue to Award Season
-        contentDiv.innerHTML += '<button onclick="continueToAwards()" style="margin-top: 20px; padding: 15px 30px; font-size: 18px;">Continue to Award Season 🏆</button>';
+
+        // Show auto-progress message instead of manual button
+        contentDiv.innerHTML += '<p style="color: #888; text-align: center; margin-top: 30px; font-size: 18px;">⏱️ Will auto-advance to Awards when all players ready (or after timer)</p>';
         
     } else if (state.phase === 'awards_voting') {
         const currentCat = state.awards.current_category;

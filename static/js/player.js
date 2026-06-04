@@ -6,6 +6,107 @@ let currentPackage = [];
 let greenlitFilms = [];
 let currentBidAmount = 0;
 
+// ============================================================================
+// GAME TIMER COMPONENT
+// ============================================================================
+
+class GameTimer {
+    constructor(containerId) {
+        this.containerId = containerId;
+        this.container = null;
+        this.timeRemaining = 0;
+        this.initialTime = 0;
+        this.updateInterval = null;
+    }
+
+    start(seconds) {
+        this.container = document.getElementById(this.containerId);
+        if (!this.container) {
+            console.error(`Timer container #${this.containerId} not found`);
+            return;
+        }
+
+        this.timeRemaining = seconds;
+        this.initialTime = seconds;
+
+        // Create timer UI (use classes not IDs so multiple timers don't conflict)
+        this.container.innerHTML = `
+            <div style="text-align: center; margin: 15px 0; padding: 15px; background: #1a1a1a; border-radius: 8px;">
+                <div class="timer-display" style="font-size: 36px; font-weight: bold; color: #4CAF50;">
+                    ${this.formatTime(seconds)}
+                </div>
+                <div style="width: 100%; height: 8px; background: #333; border-radius: 4px; margin-top: 10px; overflow: hidden;">
+                    <div class="timer-fill" style="width: 100%; height: 100%; background: #4CAF50; border-radius: 4px; transition: width 0.1s linear;"></div>
+                </div>
+                <div style="color: #888; font-size: 14px; margin-top: 8px;">Time remaining</div>
+            </div>
+        `;
+
+        this.updateInterval = setInterval(() => this.tick(), 100);
+    }
+
+    updateFromServer(secondsRemaining) {
+        // Sync with server time
+        this.timeRemaining = Math.max(0, secondsRemaining);
+        this.updateDisplay();
+
+        if (secondsRemaining <= 0) {
+            this.stop();
+        }
+    }
+
+    tick() {
+        this.timeRemaining = Math.max(0, this.timeRemaining - 0.1);
+        this.updateDisplay();
+
+        if (this.timeRemaining <= 0) {
+            this.stop();
+        }
+    }
+
+    updateDisplay() {
+        if (!this.container) return;
+        const display = this.container.querySelector('.timer-display');
+        const fill = this.container.querySelector('.timer-fill');
+
+        if (!display || !fill) return;
+
+        display.textContent = this.formatTime(this.timeRemaining);
+
+        // Color coding based on time remaining
+        if (this.timeRemaining <= 5) {
+            display.style.color = '#e50914';  // Red - urgent!
+            fill.style.background = '#e50914';
+        } else if (this.timeRemaining <= 10) {
+            display.style.color = '#ff9800';  // Orange - hurry!
+            fill.style.background = '#ff9800';
+        } else {
+            display.style.color = '#4CAF50';  // Green - plenty of time
+            fill.style.background = '#4CAF50';
+        }
+
+        // Progress bar
+        const percent = (this.timeRemaining / this.initialTime) * 100;
+        fill.style.width = percent + '%';
+    }
+
+    formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    stop() {
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
+        }
+    }
+}
+
+// Global timer instance
+let gameTimer = null;
+
 // Check for saved session on page load
 const savedPlayerName = sessionStorage.getItem('playerName');
 if (savedPlayerName) {
@@ -135,7 +236,48 @@ socket.on('game_update', (data) => {
     if (myData.films) {
         greenlitFilms = myData.films;
     }
-    
+
+    // Update timer from server (using server-calculated time_remaining to avoid clock skew)
+    if (data.active_timer && data.active_timer.type && data.active_timer.time_remaining > 0) {
+        const timer = data.active_timer;
+        const timeRemaining = timer.time_remaining;
+
+        // Determine which container to use based on timer type
+        let containerId;
+        if (timer.type === 'talent_selection') {
+            containerId = 'talent-timer';
+        } else if (timer.type === 'bidding') {
+            containerId = 'bidding-timer';
+        } else if (timer.type === 'continue') {
+            // Determine which continue screen we're on
+            if (data.phase.includes('bidding_results')) {
+                containerId = 'bidding-results-timer';
+            } else if (data.phase.includes('releases')) {
+                containerId = 'releases-timer';
+            } else if (data.phase === 'awards_results') {
+                containerId = 'awards-timer';
+            }
+        }
+
+        if (containerId) {
+            if (!gameTimer || gameTimer.containerId !== containerId) {
+                // Start new timer
+                if (gameTimer) gameTimer.stop();
+                gameTimer = new GameTimer(containerId);
+                gameTimer.start(timeRemaining);
+            } else {
+                // Update existing timer with server time
+                gameTimer.updateFromServer(timeRemaining);
+            }
+        }
+    } else {
+        // No active timer, stop if running
+        if (gameTimer) {
+            gameTimer.stop();
+            gameTimer = null;
+        }
+    }
+
     // Handle phase transitions
     if (data.phase === 'phase0_naming') {
         showScreen('naming-screen');

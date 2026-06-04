@@ -1,5 +1,70 @@
 # Hollywood Moguls - Change Log
 
+## Version 0.2.1 (2026-06-04)
+
+### Bug Fixes
+- **Fixed all timer transitions killing downstream timers**
+  - Issue: After any timer expired and triggered an auto-action, the next timer (started
+    by that action) was immediately cleared. This caused Summer Turn 1 to never show a
+    timer, and all timer-driven phase transitions to silently drop the follow-up timer
+  - Root cause: handle_timer_expiry() called clear_timer() AFTER invoking the auto-action.
+    Auto-actions like auto_ready_all_players() call start_new_turn() → start_timer(),
+    setting a new timer — which clear_timer() then destroyed
+  - Solution: In handle_timer_expiry(), silently reset active_timer state FIRST (no
+    broadcast), then invoke the auto-action. The action's own broadcasts carry the correct
+    final state (including any new timer)
+  - Files modified: socket_handlers.py
+
+- **Fixed timer display corruption on page refresh and screen transitions**
+  - Issue: GameTimer used document.getElementById('timer-display') to find its elements,
+    which searches the entire document. Since all screens exist in the DOM simultaneously
+    (just hidden), after visiting more than one timed screen the wrong element would be
+    found and updated, causing timers to freeze or disappear on refresh
+  - Solution: Changed GameTimer to use this.container.querySelector('.timer-display')
+    and CSS classes instead of IDs, scoping all queries to the timer's own container
+  - Files modified: static/js/player.js
+
+- **Fixed Spring → Summer and all continue-screen progressions not triggering**
+  - Issue: auto_ready_all_players() set the ready flags for all players but never
+    checked if all were now ready and triggered the progression — it just broadcast
+    and returned, leaving the game stuck
+  - Solution: Rewrote auto_ready_all_players() to directly trigger the appropriate
+    progression (Summer start, Awards start, Game complete, next bidding result)
+    after setting flags, mirroring the logic in the manual socket handlers
+  - Files modified: socket_handlers.py
+
+- **Fixed timer desync on page refresh**
+  - Issue: Client calculated time_remaining using Date.now() - timer.start_time,
+    causing clock skew between client and server to show wrong or frozen timers
+  - Solution: Server now calculates time_remaining in to_dict() before broadcasting;
+    client uses the server value directly
+  - Files modified: game_logic.py, static/js/player.js
+
+## Version 0.2.0 (2026-06-04)
+
+### New Features
+- **Autonomous gameplay — no host intervention required after game start**
+  - All phase transitions now happen automatically via timers or when all players act
+  - Phase 0 → Phase 1 auto-starts 3 seconds after last player finishes naming
+
+- **Server-synchronized countdown timers**
+  - 60-second timer on talent selection screen (auto-passes on expiry)
+  - 30-second timer on Bidding War screen (auto-submits $0 bid on expiry)
+  - 20-second timer on all Continue screens (auto-readies all players on expiry)
+  - Timers are server-authoritative to stay in sync across all devices
+
+- **QR code on host screen with auto-detected local IP**
+  - Host screen displays a scannable QR code pointing to the player join URL
+  - IP address is auto-detected; no manual configuration needed
+
+- **Host browser auto-opens on server start**
+  - Server automatically opens http://localhost:8080 in the default browser on launch
+
+- **Virtual environment and dependency management**
+  - Project now uses a Python virtual environment (venv/)
+  - Added .gitignore to exclude venv, __pycache__, and OS files
+  - Files modified: requirements.txt (added qrcode[pil])
+
 ## Version 0.1.1 (2026-02-01)
 
 ### Bug Fixes

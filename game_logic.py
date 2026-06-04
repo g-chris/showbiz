@@ -53,9 +53,26 @@ class GameState:
         self.awards = None
         self.selected_roles_this_phase = []
         self.advancing_turn = False       # Prevent multiple advance_turn() calls
+        self.active_timer = {
+            'type': None,           # 'continue', 'talent_selection', 'bidding'
+            'duration': 0,          # Total duration in seconds
+            'start_time': None,     # When timer started (timestamp)
+            'phase': None,          # Which phase this timer is for
+            'auto_action': None     # What to do on expiry
+        }
     
     def to_dict(self):
         """Convert state to dictionary for broadcasting"""
+        import time
+
+        # Calculate time_remaining for active timer (server-side calculation to avoid clock skew)
+        timer_data = dict(self.active_timer)  # Copy to avoid modifying original
+        if timer_data['type'] and timer_data['start_time']:
+            elapsed = time.time() - timer_data['start_time']
+            timer_data['time_remaining'] = max(0, timer_data['duration'] - elapsed)
+        else:
+            timer_data['time_remaining'] = 0
+
         return {
             'phase': self.phase,
             'players': self.players,
@@ -67,7 +84,8 @@ class GameState:
             'player_selections': self.player_selections,
             'bidding_war': self.bidding_war,
             'no_name_talent': self.no_name_talent,
-            'awards': self.awards
+            'awards': self.awards,
+            'active_timer': timer_data
         }
 
 # Utility functions
