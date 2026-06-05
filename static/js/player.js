@@ -248,6 +248,8 @@ socket.on('game_update', (data) => {
             containerId = 'talent-timer';
         } else if (timer.type === 'bidding') {
             containerId = 'bidding-timer';
+        } else if (timer.type === 'voting') {
+            containerId = 'voting-timer';
         } else if (timer.type === 'continue') {
             // Determine which continue screen we're on
             if (data.phase.includes('bidding_results')) {
@@ -402,6 +404,16 @@ socket.on('game_update', (data) => {
     } else if (data.phase === 'awards_results') {
         showScreen('awards-results-screen');
         updateAwardsResultsView(data, myData);
+    } else if (data.phase === 'game_complete') {
+        showScreen('awards-results-screen');
+        if (data.awards) {
+            updateAwardsResultsView(data, myData);
+        }
+        // Override the ready-status and hide the continue button
+        const statusDiv = document.getElementById('awards-ready-status');
+        if (statusDiv) statusDiv.innerHTML = '<p style="color: #4CAF50; font-size: 20px;">🎬 Game Complete! Thanks for playing.</p>';
+        const awardsBtn = document.getElementById('continue-awards-btn');
+        if (awardsBtn) { awardsBtn.disabled = true; awardsBtn.style.display = 'none'; }
     }
 });
 
@@ -510,6 +522,9 @@ function renderProductionCards(data, myData) {
 function updatePackagingView(gameData, playerData) {
     const availableRoles = playerData.roles || [];
     const noNameTalent = gameData.no_name_talent || {};
+    const isHoliday = gameData.phase === 'phase2_packaging';
+    document.getElementById('packagingTitle').textContent =
+        isHoliday ? '🎬 Package Your Holiday Films' : '🎬 Package Your Spring Films';
     
     // DEBUG: Log what we're receiving
     console.log('=== PACKAGING DEBUG ===');
@@ -679,7 +694,9 @@ function updateGreenlitDisplay() {
 }
 
 function finishPackaging() {
-    if (confirm('Release all remaining roles and move to Spring releases?')) {
+    const isHoliday = document.getElementById('packagingTitle').textContent.includes('Holiday');
+    const season = isHoliday ? 'Holiday' : 'Spring';
+    if (confirm(`Release all remaining roles and move to ${season} releases?`)) {
         socket.emit('finish_packaging');
     }
 }
@@ -1012,7 +1029,7 @@ function updateBiddingView(gameData, playerData) {
             waitingHtml += '<p style="margin: 5px 0;">Waiting for:</p><ul style="margin: 5px 0; padding-left: 20px;">';
 
             waitingParticipants.forEach(sid => {
-                const playerName = data.players[sid]?.name || 'Unknown';
+                const playerName = gameData.players[sid]?.name || 'Unknown';
                 const isDisconnected = disconnectTimes[sid] !== undefined;
 
                 if (isDisconnected) {

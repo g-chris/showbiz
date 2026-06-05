@@ -1,5 +1,93 @@
 # Hollywood Moguls - Change Log
 
+## Version 0.2.3 (2026-06-04)
+
+### Bug Fixes
+- **Fixed timer display freezing at previous value during phase transitions** (MEDIUM)
+  - Issue: Several phase-transition handlers called `clear_timer()` before immediately starting
+    a new timer via `start_timer()`. `clear_timer()` broadcasts a null-timer state to all
+    clients, causing the outgoing timer display to visually freeze at its last value (e.g.,
+    "19 seconds") for the brief interval before the next `start_timer()` broadcast arrived.
+    The logic was always correct; only the visualization was broken
+  - Root cause: With the UUID token system introduced in 0.2.2, `clear_timer()` is no longer
+    needed for correctness in these cases — the new timer's token automatically invalidates
+    any stale `threading.Timer` threads. The null-timer broadcast was pure overhead
+  - Solution: Removed the redundant `clear_timer()` calls from four handlers where
+    `start_timer()` immediately follows: `resolve_bidding_war()`, `handle_continue_to_summer()`,
+    `handle_start_awards()`, and `handle_vote()`. The `clear_timer()` in `resolve_selections()`
+    and `handle_continue_after_bidding()` is intentionally kept — those paths can lead to
+    packaging phases where no new timer is started, and the explicit clear is required to
+    prevent stale timer threads from firing
+  - Files modified: socket_handlers.py
+
+## Version 0.2.2 (2026-06-04)
+
+### Bug Fixes
+- **Fixed awards screen never showing when auto-ready timer fires** (CRITICAL)
+  - Issue: `auto_ready_all_players()` set `game_state.phase = 'voting'` when transitioning
+    from Holiday releases to Award Season, but both client UIs only handle `'awards_voting'`.
+    If the 20-second continue timer fired before all players clicked Continue, the game
+    advanced to an unrecognised phase and both screens went blank/frozen
+  - Solution: Corrected phase string to `'awards_voting'` to match the manual path
+  - Files modified: socket_handlers.py
+
+- **Fixed JavaScript ReferenceError in bidding war view** (HIGH)
+  - Issue: In `updateBiddingView()`, the "waiting for others" status block referenced `data`
+    (undefined in that scope) instead of the function parameter `gameData`, causing a
+    ReferenceError whenever a participant had submitted their bid and was waiting for others
+  - Solution: Changed `data.players[sid]` to `gameData.players[sid]`
+  - Files modified: static/js/player.js
+
+- **Fixed awards voting deadlock on disconnect or all-same-studio nominees** (HIGH)
+  - Issue: Voting completion checked `len(votes) == len(players)`, which included
+    disconnected players (preserved for reconnection) and players who own every nominee.
+    Either scenario caused permanent deadlock with no way to advance
+  - Solution 1: Completion now checks *eligible voters only* — players who have at least
+    one nominee they didn't produce
+  - Solution 2: Added a 60-second voting timer that auto-votes (first eligible nominee)
+    for any player who hasn't voted on expiry, mirroring the bidding/selection timers
+  - Files modified: socket_handlers.py, templates/player.html, static/js/player.js
+
+- **Fixed stale timer threads triggering the wrong auto-action** (HIGH)
+  - Issue: `threading.Timer` cannot be cancelled once started. `handle_timer_expiry()`
+    read the *current* `active_timer` type rather than the type belonging to the thread
+    that actually fired. If players selected cards quickly and a bidding war started,
+    the stale 60-second talent-selection thread would fire later, read `'bidding'` as
+    the current type, and prematurely call `auto_submit_missing_bids()` — resolving a
+    bidding war before participants could bid
+  - Solution: Each `start_timer()` call now generates a UUID token stored in
+    `active_timer`. The token is passed via closure to the `threading.Timer` callback.
+    `handle_timer_expiry()` rejects the call if the token doesn't match (i.e. a newer
+    timer has since started or been cleared)
+  - Files modified: game_logic.py, socket_handlers.py
+
+- **Fixed `game_complete` phase showing blank screen for players** (MEDIUM)
+  - Issue: `player.js` had no handler for `data.phase === 'game_complete'`, leaving
+    players frozen on a disabled awards results screen after the game ended
+  - Solution: Added a `game_complete` handler that re-renders the awards results screen
+    with final standings and replaces the Continue button with a "Game Complete" message
+  - Files modified: static/js/player.js
+
+- **Fixed no-name talent being free to use** (MEDIUM)
+  - Issue: No-name (budget indie) talent has a `salary` of $1M per role, but
+    `handle_greenlight_film()` never deducted this cost from the player's budget
+  - Solution: After validating the film package, the total no-name talent cost is
+    calculated and deducted; if the player can't afford it, packaging is rejected
+  - Files modified: socket_handlers.py
+
+- **Fixed packaging screen always showing "Spring Films"** (LOW)
+  - Issue: The packaging screen `<h1>` was static HTML. The same screen is used for
+    both Spring (`phase1_packaging`) and Holiday (`phase2_packaging`) phases
+  - Solution: Title is now set dynamically in `updatePackagingView()` based on the
+    current phase; the "Done Packaging" confirm dialog also uses the correct season name
+  - Files modified: templates/player.html, static/js/player.js
+
+- **Fixed duplicate talent name suffix skipping 'II'** (MINOR)
+  - Issue: The suffix sequence for duplicate names was Original → Jr. → III → IV → V,
+    skipping 'II' due to an off-by-one index (`name_counts - 2` instead of `- 3`)
+  - Solution: Corrected index; sequence is now Original → Jr. → II → III → IV → V
+  - Files modified: game_logic.py
+
 ## Version 0.2.1 (2026-06-04)
 
 ### Bug Fixes

@@ -340,9 +340,6 @@ def register_handlers(socketio, game_state):
         Determine the winner of a bidding war and award the card.
         Called after all participants have submitted bids.
         """
-        # Clear bidding timer since all bids are in
-        clear_timer()
-
         bids = game_state.bidding_war['bids']
         participants = game_state.bidding_war['participants']
         card_data = game_state.bidding_war['card_data']
@@ -578,24 +575,33 @@ def register_handlers(socketio, game_state):
     def start_timer(timer_type, duration_seconds, phase, auto_action):
         """Start a server-synchronized timer"""
         import time
+        import uuid
+        token = str(uuid.uuid4())
         game_state.active_timer = {
             'type': timer_type,
             'duration': duration_seconds,
             'start_time': time.time(),
             'phase': phase,
-            'auto_action': auto_action
+            'auto_action': auto_action,
+            'token': token
         }
         print(f"\n⏱️  TIMER STARTED: {timer_type} ({duration_seconds}s) for {phase}\n")
         broadcast_game_state()
 
-        # Schedule auto-action after duration
-        threading.Timer(duration_seconds, handle_timer_expiry).start()
+        # Schedule auto-action after duration, passing the token so stale threads can self-cancel
+        threading.Timer(duration_seconds, handle_timer_expiry, args=[token]).start()
 
-    def handle_timer_expiry():
+    def handle_timer_expiry(token=None):
         """Called when timer reaches 0"""
         if not game_state.active_timer['type']:
             print("⏱️  Timer expired but was already cancelled")
             return  # Timer was cancelled
+
+        # Token check: if a new timer has started since this thread was scheduled,
+        # the stored token will differ. Ignore stale threads to prevent wrong auto-actions.
+        if token and game_state.active_timer.get('token') != token:
+            print(f"⏱️  Stale timer thread fired (token mismatch), ignoring")
+            return
 
         timer_type = game_state.active_timer['type']
         print(f"\n⏰ TIMER EXPIRED: {timer_type}\n")
@@ -607,7 +613,8 @@ def register_handlers(socketio, game_state):
             'duration': 0,
             'start_time': None,
             'phase': None,
-            'auto_action': None
+            'auto_action': None,
+            'token': None
         }
 
         # Trigger auto-action (may start new timers - that is fine now that we cleared first)
@@ -617,6 +624,8 @@ def register_handlers(socketio, game_state):
             auto_submit_missing_bids()
         elif timer_type == 'continue':
             auto_ready_all_players()
+        elif timer_type == 'voting':
+            auto_submit_missing_votes()
 
     def clear_timer():
         """Reset timer state"""
@@ -627,7 +636,8 @@ def register_handlers(socketio, game_state):
             'duration': 0,
             'start_time': None,
             'phase': None,
-            'auto_action': None
+            'auto_action': None,
+            'token': None
         }
         broadcast_game_state()
 
@@ -657,6 +667,35 @@ def register_handlers(socketio, game_state):
 
         # Trigger resolution
         resolve_bidding_war()
+
+    def auto_submit_missing_votes():
+        """Auto-vote for players who haven't voted (on timer expiry or eligible-voter completion)"""
+        if not game_state.awards or game_state.phase != 'awards_voting':
+            print("⚠️  Cannot auto-vote: not in awards voting phase")
+            return
+
+        current_cat_key = game_state.awards['current_category']
+        category = game_state.awards['categories'][current_cat_key]
+        nominees = category['nominees']
+
+        for sid, player in game_state.players.items():
+            if sid in category['votes']:
+                continue  # Already voted
+
+            voter_studio = player['name']
+            # Auto-vote for the first nominee the player is eligible for
+            voted = False
+            for i, film in enumerate(nominees):
+                if film.get('studio') != voter_studio:
+                    category['votes'][sid] = i
+                    print(f"⏰ AUTO-VOTE: {player['name']} → {film['title']}")
+                    voted = True
+                    break
+
+            if not voted:
+                print(f"⏰ AUTO-VOTE SKIP: {player['name']} owns all nominees, cannot vote")
+
+        calculate_award_winner(current_cat_key)
 
     def auto_ready_all_players():
         """Auto-ready players who haven't clicked continue and trigger progression"""
@@ -707,7 +746,8 @@ def register_handlers(socketio, game_state):
                 game_state.phase = 'game_complete'
             else:
                 game_state.awards = awards_data
-                game_state.phase = 'voting'
+                game_state.phase = 'awards_voting'
+                start_timer('voting', 60, 'awards_voting', 'auto_vote')
 
         elif phase == 'awards_results':
             # Awards Results → Game Complete
@@ -806,7 +846,21 @@ def register_handlers(socketio, game_state):
         if not game_logic.validate_film_package(roles):
             emit('package_error', {'message': 'Invalid package! Need Producer, Screenwriter, Director, and Star'})
             return
-        
+
+        # Charge for no-name talent (purchased talent was already paid at selection time)
+        no_name_array = list(no_name_talent.values())
+        no_name_cost = sum(
+            no_name_array[abs(idx) - 1]['salary']
+            for idx in role_indices
+            if idx < 0 and abs(idx) - 1 < len(no_name_array)
+        )
+        if no_name_cost > 0:
+            if player['money'] < no_name_cost:
+                emit('package_error', {'message': f"Can't afford no-name talent (costs ${no_name_cost}M)!"})
+                return
+            player['money'] -= no_name_cost
+            print(f"  {player['name']} paid ${no_name_cost}M for no-name talent")
+
         # Calculate film stats
         stats = game_logic.calculate_film_stats(roles)
         
@@ -879,9 +933,6 @@ def register_handlers(socketio, game_state):
         
         # Check if all players ready
         if all(p.get('spring_releases_ready', False) for p in game_state.players.values()):
-            # Clear continue timer since all players are ready
-            clear_timer()
-
             print("\n=== Starting Phase 2: Summer Production ===\n")
             game_state.phase = 'phase2_production'
             game_state.turn = 1
@@ -910,9 +961,6 @@ def register_handlers(socketio, game_state):
         
         # Check if all players ready
         if all(p.get('holiday_releases_ready', False) for p in game_state.players.values()):
-            # Clear continue timer since all players are ready
-            clear_timer()
-
             print("\n=== Starting Award Season ===\n")
 
             # Reset ready flag
@@ -930,10 +978,13 @@ def register_handlers(socketio, game_state):
             
             game_state.phase = 'awards_voting'
             game_state.awards = awards_data
-            
+
             print(f"Award Season initialized with categories: {awards_data['active_categories']}")
             print(f"Nominees: {len(awards_data['categories']['best_picture']['nominees'])} films")
-            
+
+            # Start 60-second voting timer (auto-votes for any non-voters on expiry)
+            start_timer('voting', 60, 'awards_voting', 'auto_vote')
+
             broadcast_game_state()
         else:
             broadcast_game_state()
@@ -967,12 +1018,23 @@ def register_handlers(socketio, game_state):
         category['votes'][request.sid] = nominee_index
         player_name = game_state.players[request.sid]['name']
         print(f"{player_name} voted for nominee {nominee_index}: {selected_film['title']}")
-        
-        # Check if all players have voted
-        if len(category['votes']) == len(game_state.players):
+
+        # Check if all *eligible* voters have voted.
+        # A player is eligible if at least one nominee isn't their own film.
+        eligible_voter_sids = [
+            sid for sid, player in game_state.players.items()
+            if any(film.get('studio') != player['name'] for film in nominees)
+        ]
+
+        all_eligible_voted = bool(eligible_voter_sids) and all(
+            sid in category['votes'] for sid in eligible_voter_sids
+        )
+        no_one_eligible = not eligible_voter_sids
+
+        if all_eligible_voted or no_one_eligible:
             calculate_award_winner(current_cat_key)
-        
-        broadcast_game_state()
+        else:
+            broadcast_game_state()
     
     def calculate_award_winner(category_key):
         """Calculate the winner for a category"""

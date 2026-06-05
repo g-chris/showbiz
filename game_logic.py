@@ -54,11 +54,12 @@ class GameState:
         self.selected_roles_this_phase = []
         self.advancing_turn = False       # Prevent multiple advance_turn() calls
         self.active_timer = {
-            'type': None,           # 'continue', 'talent_selection', 'bidding'
+            'type': None,           # 'continue', 'talent_selection', 'bidding', 'voting'
             'duration': 0,          # Total duration in seconds
             'start_time': None,     # When timer started (timestamp)
             'phase': None,          # Which phase this timer is for
-            'auto_action': None     # What to do on expiry
+            'auto_action': None,    # What to do on expiry
+            'token': None           # UUID to prevent stale timer threads from firing
         }
     
     def to_dict(self):
@@ -177,7 +178,7 @@ def handle_duplicate_names(talent_list):
                 talent['name'] = f"{base_name} Jr."
             else:
                 suffixes = ['II', 'III', 'IV', 'V']
-                talent['name'] = f"{base_name} {suffixes[name_counts[base_name]-2]}"
+                talent['name'] = f"{base_name} {suffixes[min(name_counts[base_name]-3, len(suffixes)-1)]}"
         else:
             name_counts[base_name] = 1
 
