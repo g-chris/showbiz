@@ -18,7 +18,7 @@ jobs:
         include:
           - os: ubuntu-22.04        # older glibc = runs on more distros
             asset: HollywoodMoguls-linux-x86_64.tar.gz
-          - os: macos-14            # Apple Silicon runner
+          - os: macos-latest        # Apple Silicon (arm64) runner
             asset: HollywoodMoguls-macos-arm64.zip
           - os: windows-latest
             asset: HollywoodMoguls-windows-x64.exe

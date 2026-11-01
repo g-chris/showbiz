@@ -1,5 +1,11 @@
 # Hollywood Moguls - Change Log
 
+## Version 1.0.1 (2026-11-01)
+
+### Packaging
+- Build the macOS release on the `macos-latest` (Apple Silicon) runner; the `macos-14` runner
+  wasn't available, so the 1.0.0 release build never ran. No game changes since 1.0.0
+
 ## Version 1.0.0 (2026-11-01)
 
 First feature-complete release, with downloadable builds for Windows, macOS (Apple Silicon)
