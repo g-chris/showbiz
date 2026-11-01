@@ -1,5 +1,85 @@
 # Hollywood Moguls - Change Log
 
+## Version 1.0.0 (2026-11-01)
+
+First feature-complete release, with downloadable builds for Windows, macOS (Apple Silicon)
+and Linux. Bugs below were found by an automated virtual-user suite: bot players with
+eager, idle, slow, bid-war-forcing, double-tapping, reconnecting and quitting behaviour
+played 160 full games against the server, plus headless-browser games driving the real pages.
+
+### Bug Fixes
+- **Fixed game freezing when a player reconnects during a bidding war** (CRITICAL)
+  - Issue: Reconnecting moved a player's socket id in `participants` and `bids`, but not in
+    the queued `uncontested_cards` or `conflicts_queue`. Resolving the war then raised a
+    KeyError and the game stuck on the bidding results screen. Awards votes had the same problem
+  - Solution: A single `remap_sid()` now moves every per-player reference on reconnect
+  - Files modified: socket_handlers.py
+
+- **Fixed late or duplicate clicks re-running phase transitions** (HIGH)
+  - Issue: Continue/ready handlers had no phase checks. A click arriving just after a timer
+    auto-advanced could restart Summer at turn 1, and a second `start_phase0`/`start_phase1`
+    could restart the whole game mid-play
+  - Solution: Every action handler now checks it's in the right phase; host-only events
+    are ignored from player sockets
+  - Files modified: socket_handlers.py
+
+- **Fixed races between timer threads and player actions** (HIGH)
+  - Issue: Timer callbacks and socket handlers mutated game state concurrently
+  - Solution: All handlers and timer callbacks are serialized with one lock
+  - Files modified: socket_handlers.py
+
+- **Added host "Skip Waiting Players" for naming and packaging** (HIGH)
+  - Issue: These two phases have no timer, so a player who left for good blocked the game forever
+  - Solution: The host can fill in default names / finish packaging for anyone not done.
+    The host screen also flags disconnected players
+  - Files modified: socket_handlers.py, static/js/host.js, templates/host.html
+
+- **Fixed bid +/- buttons disappearing** (HIGH)
+  - Issue: After spectating one bidding war, a player's bid controls stayed hidden in every
+    later war, so they could only bid $0
+  - Files modified: static/js/player.js, templates/player.html
+
+- **Game now works without internet** (HIGH)
+  - Issue: The Socket.IO client loaded from a CDN, so on an offline LAN nothing worked
+  - Solution: Bundled socket.io 4.5.4 in static/js/vendor
+  - Files modified: templates/host.html, templates/player.html
+
+- **Join fixes** (MEDIUM)
+  - A second person choosing a name that's already in use is now refused instead of taking
+    over that player's studio (a per-browser token tells reconnects apart from new players)
+  - New players can't join a game that's already started
+  - Files modified: socket_handlers.py, static/js/player.js, templates/player.html
+
+- **Fixed timer freezing when consecutive timers share a screen** (MEDIUM)
+  - Solution: The client restarts its countdown whenever the server timer token changes
+  - Files modified: static/js/player.js
+
+- **Fixed stale film package carried from Spring into Holiday packaging** (MEDIUM)
+  - Files modified: static/js/player.js
+
+- **Host page now shows the current game immediately after a reload** (MEDIUM)
+  - Files modified: socket_handlers.py
+
+- **Fixed end-of-game screens** (MEDIUM)
+  - "End Game" used to just reload the host page. It's now **New Game (Same Studios)**, which
+    resets scores and returns everyone to the lobby
+  - The "not enough films for awards" path now shows final standings instead of a blank screen
+  - Files modified: socket_handlers.py, static/js/host.js, static/js/player.js
+
+- **Smaller fixes** (LOW)
+  - Holiday releases were titled "Spring Releases" and listed Spring films as this season's
+  - Turn header read "Year 1, Turn ☃️ Winter Turn 1"
+  - $0 bids were listed as "waiting" for a bid
+  - Players who own every nominee are told they sit the vote out
+  - Connection-lost badge now actually shows while reconnecting
+  - Input validation for card, bid, vote and package indices
+
+### Packaging
+- `debug=False` (the debug reloader opened two browser tabs and can't run in a packaged build)
+- PyInstaller spec (`showbiz.spec`) and GitHub Actions release workflow
+- `SHOWBIZ_PORT` and `SHOWBIZ_NO_BROWSER` environment variables; friendly message if the port is in use
+- README with download links, first-run steps per platform, and rules
+
 ## Version 0.2.3 (2026-06-04)
 
 ### Bug Fixes

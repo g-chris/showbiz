@@ -3,7 +3,7 @@
 <head>
     <title>Hollywood Game - Player</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5.0">
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -28,6 +28,7 @@
         <h1>🎬 Join Game</h1>
         <input type="text" id="playerName" placeholder="Your Studio Name">
         <button onclick="joinGame()">Join Game</button>
+        <p id="join-error" style="color: #ff9800; margin-top: 0.625rem;"></p>
     </div>
     
     <!-- Lobby Screen -->
@@ -57,13 +58,13 @@
         <h1>🎬 Talent Pool Created!</h1>
         <div class="info-box">
             <p>All talent has been generated and assigned stats.</p>
-            <p>Waiting for host to start production phase...</p>
+            <p>Winter production starts in a moment...</p>
         </div>
     </div>
     
     <!-- Phase 1 Production Screen -->
     <div id="phase1-screen" class="screen">
-        <h1>🎬 Year <span id="year">1</span>, Turn <span id="turnNum">1</span></h1>
+        <h1>🎬 Year <span id="year">1</span>, <span id="turnNum">Turn 1</span></h1>
         <div class="info-box">
             <h2 id="studioNameP1"></h2>
             <p>💰 Budget: $<span id="p1Money">100</span>M</p>
@@ -92,7 +93,7 @@
             </div>
         </div>
         
-        <div class="info-box" style="background: #1a1a1a;">
+        <div class="info-box" id="bid-box" style="background: #1a1a1a;">
             <h3 style="margin-top: 0;">Place Your Bid</h3>
             <p style="color: #aaa; font-size: 0.875rem;">Base Salary: $<span id="baseSalary">0</span>M</p>
             
@@ -188,7 +189,7 @@
     
     <!-- Phase 1 Releases Screen -->
     <div id="releases-screen" class="screen">
-        <h1>🎬 Spring Releases</h1>
+        <h1 id="releasesTitle">🎬 Spring Releases</h1>
         <div class="info-box">
             <h2 id="studioNameRel"></h2>
             <p>💰 Budget: $<span id="relMoney">100</span>M</p>
@@ -204,7 +205,7 @@
         <div id="all-films"></div>
         
         <div id="releases-ready-status" style="margin-top: 1.25rem; text-align: center;"></div>
-        <button onclick="continueGame()" id="continue-btn" style="margin-top: 1.25rem;">Continue to Next Phase</button>
+        <button id="continue-btn" style="margin-top: 1.25rem;">Continue to Next Phase</button>
     </div>
     
     <!-- Awards Voting Screen -->

@@ -16,6 +16,16 @@ socket.on('game_update', (data) => {
 
 function updateDisplay(state) {
     document.getElementById('phase').textContent = state.phase;
+
+    // Controls only make sense in particular phases
+    const numPlayers = Object.keys(state.players).length;
+    const startBtn = document.getElementById('start-btn');
+    startBtn.style.display = state.phase === 'lobby' ? '' : 'none';
+    startBtn.disabled = numPlayers === 0;
+    startBtn.textContent = numPlayers === 0 ? 'Waiting for players to join...' : `Start Game (${numPlayers} studios)`;
+    document.getElementById('skip-btn').style.display =
+        ['phase0_naming', 'phase1_packaging', 'phase2_packaging'].includes(state.phase) ? '' : 'none';
+    document.getElementById('new-game-btn').style.display = state.phase === 'game_complete' ? '' : 'none';
     
     // Update players
     const playersDiv = document.getElementById('players');
@@ -23,9 +33,10 @@ function updateDisplay(state) {
     for (let [sid, player] of Object.entries(state.players)) {
         playersDiv.innerHTML += `
             <div class="player-card">
-                <h3>${player.name}</h3>
+                <h3>${player.name}${player.connected === false ? ' 📵' : ''}</h3>
                 <p>💰 Budget: $${player.money}M</p>
                 <p>⭐ Score: ${player.score}</p>
+                ${player.connected === false ? '<p style="color: #ff9800;">Disconnected - rejoin with the same name</p>' : ''}
             </div>
         `;
     }
@@ -193,7 +204,7 @@ function updateDisplay(state) {
         let allFilms = [];
         for (let [sid, player] of Object.entries(state.players)) {
             if (player.films) {
-                player.films.forEach(film => {
+                player.films.filter(f => !f.season || f.season === 'Spring').forEach(film => {
                     allFilms.push({
                         ...film,
                         studio: player.name
@@ -364,7 +375,7 @@ function updateDisplay(state) {
         let allFilms = [];
         for (let [sid, player] of Object.entries(state.players)) {
             if (player.films) {
-                player.films.forEach(film => {
+                player.films.filter(f => !f.season || f.season === 'Holiday').forEach(film => {
                     allFilms.push({
                         ...film,
                         studio: player.name
@@ -494,9 +505,27 @@ function updateDisplay(state) {
             `;
         });
         contentDiv.innerHTML += '</div>';
-        
-        contentDiv.innerHTML += '<button onclick="endGame()" style="margin-top: 30px; padding: 15px 30px; font-size: 18px;">End Game</button>';
-        
+
+    } else if (state.phase === 'game_complete') {
+        detailsDiv.innerHTML = '<p>🎬 Game Complete! Thanks for playing.</p>';
+        const category = state.awards ? state.awards.categories[state.awards.current_category] : null;
+        contentDiv.innerHTML = category && category.winner
+            ? `<p style="font-size: 20px; text-align: center;">🏆 ${category.name}: <strong>${category.winner.title}</strong> (${category.winner.studio})</p>`
+            : '<p style="text-align: center;">No awards this year - not enough films were released.</p>';
+
+        contentDiv.innerHTML += '<h2 style="margin-top: 40px;">Final Standings:</h2><div class="submissions">';
+        const finalPlayers = Object.values(state.players).sort((a, b) => b.score - a.score);
+        finalPlayers.forEach((player, index) => {
+            const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+            contentDiv.innerHTML += `
+                <p style="font-size: 20px;">${medal} <strong>${player.name}:</strong> ${player.score} points | ${player.films ? player.films.length : 0} films</p>
+            `;
+        });
+        contentDiv.innerHTML += '</div>';
+    } else {
+        // Lobby (including after a New Game)
+        detailsDiv.innerHTML = '<p>Waiting for studios to join...</p>';
+        contentDiv.innerHTML = '';
     }
 }
 
@@ -516,8 +545,14 @@ function continueToAwards() {
     socket.emit('start_awards');
 }
 
-function endGame() {
-    if (confirm('Game complete! Start a new game?')) {
-        location.reload();
+function skipWaiting() {
+    if (confirm('Skip everyone who hasn\'t finished this step? Their remaining choices are filled in automatically.')) {
+        socket.emit('host_skip_waiting');
+    }
+}
+
+function newGame() {
+    if (confirm('Start a new game with the same studios? Scores reset.')) {
+        socket.emit('reset_game');
     }
 }

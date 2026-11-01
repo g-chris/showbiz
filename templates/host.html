@@ -2,12 +2,12 @@
 <html>
 <head>
     <title>Hollywood Game - Host</title>
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <h1>🎬 Hollywood Moguls - Host View</h1>
-    <p style="color: #888; font-size: 14px; margin: 5px 0;">Version 0.2.3</p>
+    <p style="color: #888; font-size: 14px; margin: 5px 0;">Version 1.0.0</p>
 
     <div style="text-align: center; margin: 20px 0; background: #2a2a2a; padding: 20px; border-radius: 10px;">
         <h3 style="margin-top: 0;">📱 Players Scan to Join</h3>
@@ -24,6 +24,8 @@
     
     <div id="controls">
         <button onclick="startPhase0()" id="start-btn">Start Game (Phase 0)</button>
+        <button onclick="skipWaiting()" id="skip-btn" style="display: none; background: #666;">Skip Waiting Players</button>
+        <button onclick="newGame()" id="new-game-btn" style="display: none;">New Game (Same Studios)</button>
     </div>
     
     <div id="content"></div>

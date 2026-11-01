@@ -107,8 +107,26 @@ class GameTimer {
 // Global timer instance
 let gameTimer = null;
 
+// Storage can throw in private-browsing modes; the game still works without it
+function storageGet(store, key) {
+    try { return window[store].getItem(key); } catch (e) { return null; }
+}
+function storageSet(store, key, value) {
+    try { window[store].setItem(key, value); } catch (e) { /* ignore */ }
+}
+function storageRemove(store, key) {
+    try { window[store].removeItem(key); } catch (e) { /* ignore */ }
+}
+
+// Per-browser token so the server can tell a reconnect from someone else picking the same name
+let playerToken = storageGet('localStorage', 'playerToken');
+if (!playerToken) {
+    playerToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    storageSet('localStorage', 'playerToken', playerToken);
+}
+
 // Check for saved session on page load
-const savedPlayerName = sessionStorage.getItem('playerName');
+const savedPlayerName = storageGet('sessionStorage', 'playerName');
 if (savedPlayerName) {
     myName = savedPlayerName;
     console.log('📱 Found saved session for:', myName);
@@ -123,14 +141,25 @@ socket.io.opts.timeout = 20000;                  // 20s timeout
 
 // Connection status function
 function updateConnectionStatus(status, message) {
-    // Updates the visual indicator
+    // Only shown while there's a problem - a connected game needs no badge
+    const box = document.getElementById('connection-status');
+    if (!box) return;
+    if (status === 'connected') {
+        box.style.display = 'none';
+        return;
+    }
+    box.style.display = 'block';
+    box.style.background = '#8B0000';
+    box.style.color = 'white';
+    document.getElementById('status-text').textContent = message || 'Disconnected';
 }
 
 // Socket.IO reconnection handlers
 socket.on('connect', () => {
+    updateConnectionStatus('connected');
     // Auto-rejoin if we have saved name
     if (myName && myName !== '') {
-        socket.emit('join_game', {name: myName});
+        socket.emit('join_game', {name: myName, token: playerToken});
     }
 });
 
@@ -184,27 +213,35 @@ const DEFAULT_NAMES = {
 function joinGame() {
     myName = document.getElementById('playerName').value.trim();
     if (myName) {
-        // Save to session storage
-        sessionStorage.setItem('playerName', myName);
-        socket.emit('join_game', {name: myName});
+        socket.emit('join_game', {name: myName, token: playerToken});
     }
 }
 
-socket.on('joined', () => {
+socket.on('joined', (data) => {
+    if (data && data.name) myName = data.name;
     console.log('✅ Successfully joined game as:', myName);
-    
-    // Save to session storage
-    sessionStorage.setItem('playerName', myName);
 
+    // Save to session storage
+    storageSet('sessionStorage', 'playerName', myName);
+
+    document.getElementById('join-error').textContent = '';
     showScreen('lobby-screen');
-    document.getElementById('studioName').textContent = myName;
-    document.getElementById('studioNameP1').textContent = myName;
-    document.getElementById('studioNamePkg').textContent = myName;
-    document.getElementById('studioNameRel').textContent = myName;
+    ['studioName', 'studioNameP1', 'studioNamePkg', 'studioNameRel',
+     'biddingStudioName', 'resultsStudioName'].forEach(id => {
+        document.getElementById(id).textContent = myName;
+    });
 
     // Update connection status
     updateConnectionStatus('connected');
 
+});
+
+socket.on('join_error', (data) => {
+    // Forget the rejected name so a reload doesn't retry it
+    myName = '';
+    storageRemove('sessionStorage', 'playerName');
+    showScreen('join-screen');
+    document.getElementById('join-error').textContent = data.message;
 });
 
 socket.on('selection_error', (data) => {
@@ -262,11 +299,15 @@ socket.on('game_update', (data) => {
         }
 
         if (containerId) {
-            if (!gameTimer || gameTimer.containerId !== containerId) {
+            // A new server timer has a new token - restart even if it reuses the same
+            // container (e.g. consecutive talent-selection turns)
+            if (!gameTimer || gameTimer.containerId !== containerId || gameTimer.token !== timer.token) {
                 // Start new timer
                 if (gameTimer) gameTimer.stop();
                 gameTimer = new GameTimer(containerId);
-                gameTimer.start(timeRemaining);
+                gameTimer.token = timer.token;
+                gameTimer.start(timer.duration);
+                gameTimer.updateFromServer(timeRemaining);
             } else {
                 // Update existing timer with server time
                 gameTimer.updateFromServer(timeRemaining);
@@ -281,7 +322,14 @@ socket.on('game_update', (data) => {
     }
 
     // Handle phase transitions
-    if (data.phase === 'phase0_naming') {
+    if (data.phase === 'lobby') {
+        // Fresh game (or host started a new one) - drop anything left from the last game
+        currentPackage = [];
+        window.lastNamingRole = undefined;
+        window.lastBiddingCardIndex = undefined;
+        showScreen('lobby-screen');
+
+    } else if (data.phase === 'phase0_naming') {
         showScreen('naming-screen');
         
         const myProg = data.naming_progress.submissions[socket.id];
@@ -346,6 +394,8 @@ socket.on('game_update', (data) => {
         showScreen('phase0-complete-screen');
         
     } else if (data.phase === 'phase1_production') {
+        // Packaging selections are per-season; never carry them into the next one
+        currentPackage = [];
         showScreen('phase1-screen');
         document.getElementById('year').textContent = data.year;
         document.getElementById('turnNum').textContent = `☃️ Winter Turn ${data.turn}`;
@@ -356,6 +406,7 @@ socket.on('game_update', (data) => {
         renderProductionCards(data, myData);
         
     } else if (data.phase === 'phase2_production') {
+        currentPackage = [];
         showScreen('phase1-screen');
         document.getElementById('year').textContent = data.year;
         document.getElementById('turnNum').textContent = `☀️ Summer Turn ${data.turn}`;
@@ -406,9 +457,7 @@ socket.on('game_update', (data) => {
         updateAwardsResultsView(data, myData);
     } else if (data.phase === 'game_complete') {
         showScreen('awards-results-screen');
-        if (data.awards) {
-            updateAwardsResultsView(data, myData);
-        }
+        updateAwardsResultsView(data, myData);
         // Override the ready-status and hide the continue button
         const statusDiv = document.getElementById('awards-ready-status');
         if (statusDiv) statusDiv.innerHTML = '<p style="color: #4CAF50; font-size: 20px;">🎬 Game Complete! Thanks for playing.</p>';
@@ -702,6 +751,10 @@ function finishPackaging() {
 }
 
 function updateReleasesView(gameData, playerData, seasonName) {
+    document.getElementById('releasesTitle').textContent =
+        seasonName === 'Spring' ? '🎬 Spring Releases' : '🎄 Holiday Releases';
+    // Films keep their box office from earlier seasons; only show this season's
+    const inSeason = film => !film.season || film.season === seasonName;
     const continueBtn = document.getElementById('continue-btn');
     if (seasonName === 'Spring') {
         continueBtn.textContent = 'Continue to Summer Production ☀️';
@@ -712,8 +765,8 @@ function updateReleasesView(gameData, playerData, seasonName) {
     }
     
     const myFilmsDiv = document.getElementById('my-films');
-    const myFilms = playerData.films || [];
-    
+    const myFilms = (playerData.films || []).filter(inSeason);
+
     if (myFilms.length === 0) {
         myFilmsDiv.innerHTML = '<p><em>You didn\'t release any films this season</em></p>';
     } else {
@@ -737,7 +790,7 @@ function updateReleasesView(gameData, playerData, seasonName) {
     let allFilms = [];
     for (let [sid, player] of Object.entries(gameData.players)) {
         if (player.films) {
-            player.films.forEach(film => {
+            player.films.filter(inSeason).forEach(film => {
                 allFilms.push({
                     ...film,
                     studio: player.name
@@ -745,7 +798,7 @@ function updateReleasesView(gameData, playerData, seasonName) {
             });
         }
     }
-    
+
     allFilms.sort((a, b) => b.box_office - a.box_office);
     
     allFilms.forEach((film, index) => {
@@ -819,9 +872,12 @@ function updateAwardsVotingView(gameData, playerData) {
     });
     
     const statusDiv = document.getElementById('vote-status');
+    const canVote = category.nominees.some(film => film.studio !== myStudio);
     if (hasVoted) {
         const votedFilm = category.nominees[category.votes[socket.id]];
         statusDiv.innerHTML = `<p style="color: #FFD700; font-size: 18px;">✓ You voted for: <strong>${votedFilm.title}</strong></p><p>Waiting for other players...</p>`;
+    } else if (!canVote) {
+        statusDiv.innerHTML = '<p style="color: #FFD700; font-size: 18px;">Every nominee is yours - you sit this vote out. Waiting for other players...</p>';
     } else {
         statusDiv.innerHTML = '';
     }
@@ -832,12 +888,20 @@ function voteForNominee(index) {
 }
 
 function updateAwardsResultsView(gameData, playerData) {
-    const currentCat = gameData.awards.current_category;
-    const category = gameData.awards.categories[currentCat];
-    const winner = category.winner;
-    
+    const category = gameData.awards
+        ? gameData.awards.categories[gameData.awards.current_category]
+        : null;
+    const winner = category ? category.winner : null;
+
     const winnerDiv = document.getElementById('winner-announcement');
-    winnerDiv.innerHTML = `
+    if (!winner) {
+        // Awards skipped (fewer than 2 films) or nobody could vote
+        winnerDiv.innerHTML = `
+        <div style="text-align: center; padding: 30px;">
+            <h2 style="color: #FFD700;">${category ? 'No winner this year' : 'Not enough films for an awards ceremony'}</h2>
+        </div>
+    `;
+    } else winnerDiv.innerHTML = `
         <div style="text-align: center; padding: 30px;">
             <h1 style="color: #FFD700; font-size: 64px; margin: 0;">🏆</h1>
             <h2 style="color: #FFD700; margin: 10px 0;">${category.name}</h2>
@@ -945,7 +1009,12 @@ function updateBiddingView(gameData, playerData) {
     
     // Set base salary
     document.getElementById('baseSalary').textContent = cardData.salary;
-    
+
+    // The spectator view hides the whole +/- row; undo that for participants so the
+    // controls come back in later bidding wars
+    document.querySelector('[onclick="decreaseBid()"]').parentElement.style.display = isParticipant ? 'flex' : 'none';
+    document.getElementById('bid-box').style.display = isParticipant ? '' : 'none';
+
     if (!isParticipant) {
         // Not participating in this bidding war - show spectator view
 
@@ -985,9 +1054,6 @@ function updateBiddingView(gameData, playerData) {
         document.getElementById('submit-bid-btn').disabled = true;
         document.getElementById('submit-bid-btn').style.display = 'none';
 
-        // Hide bid controls completely
-        document.querySelector('[onclick="decreaseBid()"]').parentElement.style.display = 'none';
-
     } else if (hasAlreadyBid) {
         // Already submitted bid
         const myBid = biddingWar.bids[socket.id];
@@ -1022,7 +1088,8 @@ function updateBiddingView(gameData, playerData) {
     // Show disconnect status for waiting participants (if already bid)
     if (hasAlreadyBid) {
         const disconnectTimes = biddingWar.disconnect_times || {};
-        const waitingParticipants = biddingWar.participants.filter(sid => !biddingWar.bids[sid]);
+        // A $0 bid is still a bid
+        const waitingParticipants = biddingWar.participants.filter(sid => biddingWar.bids[sid] === undefined);
 
         if (waitingParticipants.length > 0) {
             let waitingHtml = '<div style="margin-top: 20px; color: #aaa; text-align: left;">';

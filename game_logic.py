@@ -271,6 +271,7 @@ def process_film_releases(players, season_name='Spring'):
                     # Calculate box office using our single formula
                     results = calculate_box_office(film)
                     film.update(results)
+                    film['season'] = season_name
                     
                     # Add earnings to player
                     player['money'] += film['box_office']

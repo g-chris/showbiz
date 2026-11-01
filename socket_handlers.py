@@ -3,78 +3,107 @@ Socket.IO event handlers for Hollywood Moguls
 """
 from flask import request
 from flask_socketio import emit
+import functools
 import game_logic
 import threading
 
 def register_handlers(socketio, game_state):
     """Register all socket event handlers"""
-    
+
+    # Socket handlers and timer threads all mutate game_state. Serialize them so a
+    # timer firing at the same moment as a player's click can't resolve a phase twice.
+    state_lock = threading.RLock()
+
+    def locked(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            with state_lock:
+                return fn(*args, **kwargs)
+        return wrapper
+
+    # Reconnect tokens are kept out of game_state so they're never broadcast
+    player_tokens = {}       # {player_name: token}
+    connected_sids = set()
+
     def broadcast_game_state():
         """Broadcast current game state to all clients"""
         socketio.emit('game_update', game_state.to_dict())
-    
+
+    def current_player():
+        """Player record for the calling socket, or None (host / stale socket)"""
+        return game_state.players.get(request.sid)
+
     @socketio.on('connect')
+    @locked
     def handle_connect():
+        connected_sids.add(request.sid)
         print(f'Client connected: {request.sid}')
-    
+        # Bring a freshly (re)loaded page up to date immediately
+        emit('game_update', game_state.to_dict())
+
+    def remap_sid(old_sid, new_sid):
+        """Point every per-player reference in game_state at a player's new socket id"""
+        def move_key(d):
+            if isinstance(d, dict) and old_sid in d:
+                d[new_sid] = d.pop(old_sid)
+
+        game_state.players[new_sid] = game_state.players.pop(old_sid)
+        move_key(game_state.naming_progress.get('submissions'))
+        move_key(game_state.player_selections)
+
+        bw = game_state.bidding_war
+        bw['participants'] = [new_sid if s == old_sid else s for s in bw.get('participants', [])]
+        move_key(bw.get('bids'))
+        bw.get('disconnect_times', {}).pop(old_sid, None)
+        bw['conflicts_queue'] = [
+            (card_idx, [new_sid if s == old_sid else s for s in sids])
+            for card_idx, sids in bw.get('conflicts_queue', [])
+        ]
+        for sids in bw.get('uncontested_cards', {}).values():
+            for i, s in enumerate(sids):
+                if s == old_sid:
+                    sids[i] = new_sid
+
+        if game_state.awards:
+            for category in game_state.awards['categories'].values():
+                move_key(category['votes'])
+                for film in category['nominees']:
+                    if film.get('player_sid') == old_sid:
+                        film['player_sid'] = new_sid
+
     @socketio.on('join_game')
+    @locked
     def handle_join(data):
-        player_name = data['name']
-    
+        player_name = str(data.get('name', '')).strip()[:40]
+        token = data.get('token')
+        if not player_name:
+            emit('join_error', {'message': 'Please enter a studio name.'})
+            return
+
         # Check if a player with this name already exists (RECONNECTION)
         existing_sid = None
         for sid, player in game_state.players.items():
             if player['name'] == player_name:
                 existing_sid = sid
                 break
-        
-        if existing_sid:
+
+        if existing_sid == request.sid:
+            pass  # Duplicate join from the same socket - nothing to transfer
+        elif existing_sid:
+            # Someone else is actively using this name from a different browser
+            known_token = player_tokens.get(player_name)
+            if existing_sid in connected_sids and known_token and token != known_token:
+                emit('join_error', {'message': f'"{player_name}" is already taken. Pick another studio name.'})
+                return
+
             # RECONNECTION - transfer player data to new socket.id
             print(f'🔄 {player_name} reconnecting (old: {existing_sid[:8]}, new: {request.sid[:8]})')
-            player_data = game_state.players[existing_sid]
-            
-            # Remove old socket.id entry
-            del game_state.players[existing_sid]
-            
-            # Add player with NEW socket.id but PRESERVE their data
-            game_state.players[request.sid] = player_data
-            
-            # Update naming progress if in Phase 0
-            if game_state.phase.startswith('phase0') and existing_sid in game_state.naming_progress.get('submissions', {}):
-                prog_data = game_state.naming_progress['submissions'][existing_sid]
-                del game_state.naming_progress['submissions'][existing_sid]
-                game_state.naming_progress['submissions'][request.sid] = prog_data
-
-            # Update bidding war references if active
-            if game_state.bidding_war.get('active'):
-                # Update participants list
-                if existing_sid in game_state.bidding_war['participants']:
-                    participants = game_state.bidding_war['participants']
-                    idx = participants.index(existing_sid)
-                    participants[idx] = request.sid
-                    print(f'  🎲 Updated bidding war participant: {existing_sid[:8]} → {request.sid[:8]}')
-
-                # Transfer any submitted bid to new socket ID
-                if existing_sid in game_state.bidding_war['bids']:
-                    bid_amount = game_state.bidding_war['bids'][existing_sid]
-                    del game_state.bidding_war['bids'][existing_sid]
-                    game_state.bidding_war['bids'][request.sid] = bid_amount
-                    print(f'  💰 Transferred bid: ${bid_amount}M to new socket')
-
-                # Clear disconnect timer if they reconnected during bidding
-                if 'disconnect_times' in game_state.bidding_war:
-                    if existing_sid in game_state.bidding_war['disconnect_times']:
-                        del game_state.bidding_war['disconnect_times'][existing_sid]
-                        print(f'  ⏱️ Cancelled auto-bid timeout for {player_name}')
-
-            # Update player_selections if they had selected something
-            if existing_sid in game_state.player_selections:
-                selection = game_state.player_selections[existing_sid]
-                del game_state.player_selections[existing_sid]
-                game_state.player_selections[request.sid] = selection
-                print(f'  ✅ Transferred card selection to new socket')
-
+            remap_sid(existing_sid, request.sid)
+            player_data = game_state.players[request.sid]
             print(f'  ✅ Restored: ${player_data["money"]}M, {player_data["score"]} pts, {len(player_data.get("roles", []))} roles, {len(player_data.get("films", []))} films')
+        elif game_state.phase != 'lobby':
+            emit('join_error', {'message': 'This game is already in progress. Wait for the next one!'})
+            return
         else:
             # NEW PLAYER
             game_state.players[request.sid] = {
@@ -85,17 +114,24 @@ def register_handlers(socketio, game_state):
                 'films': []
             }
             print(f'{player_name} joined the game')
-        
-        emit('joined')
+
+        if token:
+            player_tokens[player_name] = token
+        game_state.players[request.sid]['connected'] = True
+        emit('joined', {'name': player_name})
         broadcast_game_state()
 
     @socketio.on('heartbeat')
-    def handle_heartbeat(data):
+    def handle_heartbeat(data=None):
         """Keep connection alive - mobile browsers kill idle connections"""
         pass  # Just acknowledge - the connection staying alive is the point
-    
+
     @socketio.on('start_phase0')
+    @locked
     def handle_start_phase0():
+        if game_state.phase != 'lobby' or not game_state.players:
+            print(f"⚠️  Ignoring start_phase0 in phase {game_state.phase} with {len(game_state.players)} players")
+            return
         print("Starting Phase 0: Talent Naming")
         game_state.phase = 'phase0_naming'
         game_state.naming_progress = {
@@ -107,18 +143,28 @@ def register_handlers(socketio, game_state):
         broadcast_game_state()
     
     @socketio.on('submit_talent_name')
+    @locked
     def handle_talent_name(data):
-        name = data['name']
+        if game_state.phase != 'phase0_naming':
+            return
+        name = str(data.get('name', '')).strip()[:40]
+        if not name:
+            return
+        if add_talent_name(request.sid, name):
+            broadcast_game_state()
+
+    def add_talent_name(sid, name):
+        """Add one talent name for a player. Returns True if it was accepted."""
         prog = game_state.naming_progress
-        
-        if request.sid not in prog['submissions']:
-            return
-        
-        player_prog = prog['submissions'][request.sid]
-        
+
+        if sid not in prog['submissions']:
+            return False
+
+        player_prog = prog['submissions'][sid]
+
         if player_prog['complete']:
-            return
-        
+            return False
+
         # Determine which role type to add to
         if len(player_prog['screenwriter']) < 3:
             role_type = 'screenwriter'
@@ -130,21 +176,21 @@ def register_handlers(socketio, game_state):
             role_type = 'star'
             player_prog['star'].append(name)
         else:
-            return
-        
-        print(f"{game_state.players[request.sid]['name']} submitted {role_type}: {name}")
-        
+            return False
+
+        print(f"{game_state.players[sid]['name']} submitted {role_type}: {name}")
+
         # Generate stats
         talent = game_logic.generate_talent_stats(role_type, name)
         game_state.talent_pool.append(talent)
-        
+
         # Check if this player is done
         if (len(player_prog['screenwriter']) == 3 and
             len(player_prog['director']) == 3 and
             len(player_prog['star']) == 5):
             player_prog['complete'] = True
-            print(f"{game_state.players[request.sid]['name']} completed Phase 0!")
-            
+            print(f"{game_state.players[sid]['name']} completed Phase 0!")
+
             # Check if ALL players are done
             if all(p['complete'] for p in prog['submissions'].values()):
                 game_logic.handle_duplicate_names(game_state.talent_pool)
@@ -154,10 +200,14 @@ def register_handlers(socketio, game_state):
                 # AUTO-PROGRESS: Start Phase 1 after 3 seconds
                 threading.Timer(3.0, handle_start_phase1).start()
 
-        broadcast_game_state()
-    
+        return True
+
     @socketio.on('start_phase1')
+    @locked
     def handle_start_phase1():
+        if game_state.phase != 'phase0_complete':
+            print(f"⚠️  Ignoring start_phase1 in phase {game_state.phase}")
+            return
         print("Starting Phase 1: Winter Production")
         game_state.selected_roles_this_phase = []
         game_state.phase = 'phase1_production'
@@ -192,19 +242,24 @@ def register_handlers(socketio, game_state):
         start_timer('talent_selection', 60, game_state.phase, 'pass')
 
     @socketio.on('select_card')
+    @locked
     def handle_select_card(data):
+        player = current_player()
+        if not player or game_state.phase not in ('phase1_production', 'phase2_production'):
+            return
+
         # Prevent re-selection during same turn
         if request.sid in game_state.player_selections:
             emit('selection_error', {'message': 'You have already made your selection for this turn!'})
             return
-        
-        selection = data['index']
-        player = game_state.players[request.sid]
+
+        selection = data.get('index')
         player_name = player['name']
-        
+
         # Check affordability
         if selection != 'pass':
-            if selection >= len(game_state.current_turn_cards):
+            if (not isinstance(selection, int) or isinstance(selection, bool) or
+                    not 0 <= selection < len(game_state.current_turn_cards)):
                 emit('selection_error', {'message': 'Invalid card selection!'})
                 return
             
@@ -410,15 +465,19 @@ def register_handlers(socketio, game_state):
     # ============================================================================
     
     @socketio.on('submit_bid')
+    @locked
     def handle_submit_bid(data):
         """
         Handle a player's bid submission during a bidding war.
         Validates affordability and automatically resolves when all bids are in.
         """
         bid_amount = data.get('bid_amount', 0)
-        
+        if not isinstance(bid_amount, int) or isinstance(bid_amount, bool):
+            emit('bid_error', {'message': 'Invalid bid!'})
+            return
+
         # Validation checks
-        if not game_state.bidding_war.get('active'):
+        if not game_state.bidding_war.get('active') or not game_state.phase.endswith('_bidding'):
             emit('bid_error', {'message': 'No active bidding war!'})
             return
         
@@ -470,12 +529,10 @@ def register_handlers(socketio, game_state):
         import threading
         import time
 
-        def auto_submit_bid():
-            # Wait 60 seconds for reconnection
-            time.sleep(60)
-
+        @locked
+        def submit_if_still_needed():
             # Check if still needed (player might have reconnected and bid)
-            if not game_state.bidding_war.get('active'):
+            if not game_state.bidding_war.get('active') or not game_state.phase.endswith('_bidding'):
                 print(f'  ⏭️ Auto-bid cancelled: bidding war already resolved')
                 return
 
@@ -501,6 +558,11 @@ def register_handlers(socketio, game_state):
             else:
                 print(f"  Waiting for {num_participants - num_bids} more bid(s)...")
                 broadcast_game_state()
+
+        def auto_submit_bid():
+            # Wait 60 seconds for reconnection (outside the lock)
+            time.sleep(60)
+            submit_if_still_needed()
 
         # Start timeout thread
         timeout_thread = threading.Thread(target=auto_submit_bid, daemon=True)
@@ -591,6 +653,7 @@ def register_handlers(socketio, game_state):
         # Schedule auto-action after duration, passing the token so stale threads can self-cancel
         threading.Timer(duration_seconds, handle_timer_expiry, args=[token]).start()
 
+    @locked
     def handle_timer_expiry(token=None):
         """Called when timer reaches 0"""
         if not game_state.active_timer['type']:
@@ -785,12 +848,15 @@ def register_handlers(socketio, game_state):
         broadcast_game_state()
 
     @socketio.on('continue_after_bidding')
+    @locked
     def handle_continue_after_bidding():
         """
         Socket handler for when players/host continue after viewing bidding results.
         Proceeds to next conflict or continues turn.
         """
-        player = game_state.players[request.sid]
+        player = current_player()
+        if not player or not game_state.phase.endswith('_bidding_results'):
+            return
         player['bidding_results_ready'] = True
         
         player_name = player['name']
@@ -812,18 +878,29 @@ def register_handlers(socketio, game_state):
             broadcast_game_state()
     
     @socketio.on('request_update')
+    @locked
     def handle_request_update():
-        broadcast_game_state()
-    
+        # Only the asking client needs a fresh copy
+        emit('game_update', game_state.to_dict())
+
     @socketio.on('greenlight_film')
+    @locked
     def handle_greenlight_film(data):
-        player = game_state.players[request.sid]
-        role_indices = data['roleIndices']
-        title = data['title'].strip()
-        teaser = data.get('teaser', '').strip()
-        
+        player = current_player()
+        if not player or game_state.phase not in ('phase1_packaging', 'phase2_packaging'):
+            return
+        role_indices = data.get('roleIndices', [])
+        title = str(data.get('title', '')).strip()[:80]
+        teaser = str(data.get('teaser', '')).strip()[:200]
+
         if not title:
             emit('package_error', {'message': 'Film title is required!'})
+            return
+
+        if (not isinstance(role_indices, list) or
+                not all(isinstance(i, int) and not isinstance(i, bool) for i in role_indices) or
+                len(set(i for i in role_indices if i >= 0)) != len([i for i in role_indices if i >= 0])):
+            emit('package_error', {'message': 'Invalid package!'})
             return
         
         # Extract roles (handle both regular and no-name talent)
@@ -885,30 +962,90 @@ def register_handlers(socketio, game_state):
         broadcast_game_state()
     
     @socketio.on('finish_packaging')
+    @locked
     def handle_finish_packaging():
-        player = game_state.players[request.sid]
-        
-        # Refund remaining roles
+        player = current_player()
+        if not player or game_state.phase not in ('phase1_packaging', 'phase2_packaging'):
+            return
+        finish_packaging_for(player)
+        check_packaging_complete()
+        broadcast_game_state()
+
+    def finish_packaging_for(player):
+        """Release a player's leftover roles (half refund) and mark them done packaging"""
         if player.get('roles'):
             refund = sum(r['salary'] for r in player['roles']) // 2
             player['money'] += refund
             print(f"{player['name']} released {len(player['roles'])} roles for ${refund}M")
             player['roles'] = []
-        
-        # Determine which phase we're in
+
         if game_state.phase == 'phase1_packaging':
             player['spring_ready'] = True
-            # Check if all players ready
+        elif game_state.phase == 'phase2_packaging':
+            player['holiday_ready'] = True
+
+    def check_packaging_complete():
+        if game_state.phase == 'phase1_packaging':
             if all(p.get('spring_ready', False) for p in game_state.players.values()):
                 start_releases('Spring', 'phase1_releases')
         elif game_state.phase == 'phase2_packaging':
-            player['holiday_ready'] = True
-            # Check if all players ready
             if all(p.get('holiday_ready', False) for p in game_state.players.values()):
                 start_releases('Holiday', 'phase2_releases')
-        
+
+    @socketio.on('host_skip_waiting')
+    @locked
+    def handle_host_skip_waiting():
+        """
+        Host override for the two untimed phases (naming, packaging) so a player who
+        has left for good can't hold the game hostage.
+        """
+        if request.sid in game_state.players:
+            return  # Players can't use the host override
+        phase = game_state.phase
+
+        if phase == 'phase0_naming':
+            for sid, prog in game_state.naming_progress['submissions'].items():
+                if prog['complete']:
+                    continue
+                print(f"⏭️  HOST SKIP: auto-naming talent for {game_state.players[sid]['name']}")
+                while not prog['complete'] and game_state.phase == 'phase0_naming':
+                    counts = {r: len(prog[r]) for r in ('screenwriter', 'director', 'star')}
+                    role = next(r for r, limit in (('screenwriter', 3), ('director', 3), ('star', 5))
+                                if counts[r] < limit)
+                    pool = game_logic.DEFAULT_NAMES[role]
+                    add_talent_name(sid, pool[counts[role] % len(pool)])
+        elif phase in ('phase1_packaging', 'phase2_packaging'):
+            ready_flag = 'spring_ready' if phase == 'phase1_packaging' else 'holiday_ready'
+            for player in game_state.players.values():
+                if not player.get(ready_flag):
+                    print(f"⏭️  HOST SKIP: finishing packaging for {player['name']}")
+                    finish_packaging_for(player)
+            check_packaging_complete()
+        else:
+            return
+
         broadcast_game_state()
-    
+
+    @socketio.on('reset_game')
+    @locked
+    def handle_reset_game():
+        """Host starts a new game, keeping the current roster of studios"""
+        if request.sid in game_state.players or game_state.phase != 'game_complete':
+            return
+        roster = {sid: p for sid, p in game_state.players.items()}
+        game_state.reset()  # Also clears the timer token, so any stale timer thread is ignored
+        for sid, p in roster.items():
+            game_state.players[sid] = {
+                'name': p['name'],
+                'money': 100,
+                'score': 0,
+                'roles': [],
+                'films': [],
+                'connected': p.get('connected', False)
+            }
+        print(f"\n🔁 NEW GAME - back to lobby with {len(roster)} studios\n")
+        broadcast_game_state()
+
     def start_releases(season_name, phase_name):
         """Generic function to handle any release phase"""
         game_state.phase = phase_name
@@ -920,10 +1057,12 @@ def register_handlers(socketio, game_state):
         broadcast_game_state()
     
     @socketio.on('continue_to_summer')
+    @locked
     def handle_continue_to_summer():
         """Start Phase 2: Summer Production - wait for all players"""
-        game_state.selected_roles_this_phase = []
-        player = game_state.players[request.sid]
+        player = current_player()
+        if not player or game_state.phase != 'phase1_releases':
+            return
         player['spring_releases_ready'] = True
         
         player_name = player['name']
@@ -936,7 +1075,8 @@ def register_handlers(socketio, game_state):
             print("\n=== Starting Phase 2: Summer Production ===\n")
             game_state.phase = 'phase2_production'
             game_state.turn = 1
-            
+            game_state.selected_roles_this_phase = []
+
             # Reset ready flags
             for p in game_state.players.values():
                 p['spring_ready'] = False
@@ -949,9 +1089,12 @@ def register_handlers(socketio, game_state):
             broadcast_game_state()
     
     @socketio.on('start_awards')
+    @locked
     def handle_start_awards():
         """Start Award Season - wait for all players"""
-        player = game_state.players[request.sid]
+        player = current_player()
+        if not player or game_state.phase != 'phase2_releases':
+            return
         player['holiday_releases_ready'] = True
         
         player_name = player['name']
@@ -972,6 +1115,7 @@ def register_handlers(socketio, game_state):
             
             if not awards_data:
                 print("Not enough films for awards! Skipping to final results.")
+                clear_timer()
                 game_state.phase = 'game_complete'
                 broadcast_game_state()
                 return
@@ -990,19 +1134,21 @@ def register_handlers(socketio, game_state):
             broadcast_game_state()
     
     @socketio.on('vote_for_nominee')
+    @locked
     def handle_vote(data):
         """Player votes for a nominee"""
-        nominee_index = data['nominee_index']
-        
-        if not hasattr(game_state, 'awards') or not game_state.awards:
+        nominee_index = data.get('nominee_index')
+
+        if not game_state.awards or game_state.phase != 'awards_voting' or not current_player():
             return
-        
+
         current_cat_key = game_state.awards['current_category']
         category = game_state.awards['categories'][current_cat_key]
         nominees = category['nominees']
-        
+
         # Validate vote
-        if nominee_index >= len(nominees):
+        if (not isinstance(nominee_index, int) or isinstance(nominee_index, bool) or
+                not 0 <= nominee_index < len(nominees)):
             emit('vote_error', {'message': 'Invalid nominee selection!'})
             return
         
@@ -1067,9 +1213,12 @@ def register_handlers(socketio, game_state):
         broadcast_game_state()
     
     @socketio.on('continue_from_awards')
+    @locked
     def handle_continue_from_awards():
         """Handle continuing from awards results to game complete"""
-        player = game_state.players[request.sid]
+        player = current_player()
+        if not player or game_state.phase != 'awards_results':
+            return
         player['awards_results_ready'] = True
         
         player_name = player['name']
@@ -1094,12 +1243,16 @@ def register_handlers(socketio, game_state):
             broadcast_game_state()
     
     @socketio.on('disconnect')
-
+    @locked
     def handle_disconnect():
+        connected_sids.discard(request.sid)
         if request.sid in game_state.players:
             player_name = game_state.players[request.sid]['name']
+            game_state.players[request.sid]['connected'] = False
             print(f'📱 {player_name} disconnected (socket: {request.sid[:8]})')
             print(f'  💾 Player data preserved for reconnection')
+            # Let the host see who has dropped
+            broadcast_game_state()
 
             # Track disconnect during active bidding war
             if game_state.bidding_war.get('active'):
